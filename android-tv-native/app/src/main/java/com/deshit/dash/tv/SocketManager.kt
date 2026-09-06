@@ -11,7 +11,9 @@ class SocketManager(
     private val token: String,
     private val onOverride: (mediaId: String, url: String, tier: String) -> Unit,
     private val onResume: () -> Unit,
-    private val onSync: () -> Unit
+    private val onSync: () -> Unit,
+    private val onUpdate: ((versionCode: Int, apkUrl: String, changelog: String?) -> Unit)? = null,
+    private val onMigrate: ((newServerUrl: String) -> Unit)? = null
 ) {
     private var socket: Socket? = null
     private val TAG = "SocketManager"
@@ -54,6 +56,30 @@ class SocketManager(
             socket?.on("SYNC_CONTENT") {
                 Log.d(TAG, "SYNC_CONTENT")
                 onSync()
+            }
+
+            socket?.on("APP_UPDATE") { args ->
+                if (args.isNotEmpty()) {
+                    val data = args[0] as? JSONObject
+                    val versionCode = data?.optInt("versionCode", 0) ?: 0
+                    val apkUrl = data?.optString("apkUrl") ?: ""
+                    val changelog = data?.optString("changelog")
+                    if (apkUrl.isNotEmpty()) {
+                        Log.d(TAG, "APP_UPDATE received: v$versionCode at $apkUrl")
+                        onUpdate?.invoke(versionCode, apkUrl, changelog)
+                    }
+                }
+            }
+
+            socket?.on("SERVER_MIGRATE") { args ->
+                if (args.isNotEmpty()) {
+                    val data = args[0] as? JSONObject
+                    val newUrl = data?.optString("newUrl") ?: ""
+                    if (newUrl.isNotEmpty()) {
+                        Log.d(TAG, "SERVER_MIGRATE received: $newUrl")
+                        onMigrate?.invoke(newUrl)
+                    }
+                }
             }
 
             socket?.on(Socket.EVENT_DISCONNECT) {

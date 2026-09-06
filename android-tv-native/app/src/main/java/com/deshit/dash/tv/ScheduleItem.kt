@@ -17,12 +17,12 @@ data class ScheduleItem(
 )
 
 data class PairingResponse(
-    val status: String?,
-    val deviceId: String?,
-    val token: String?,
-    val name: String?,
-    val subcenterName: String?,
-    val error: String?
+    val status: String? = null,
+    val deviceId: String? = null,
+    val token: String? = null,
+    val name: String? = null,
+    val subcenterName: String? = null,
+    val error: String? = null
 )
 
 data class DeviceInfo(

@@ -16,7 +16,27 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    private var baseUrl = ""
+    const val DEFAULT_SERVER_URL = "https://api.sbmoffice.net"
+    private const val GITHUB_CONFIG_URL = "https://raw.githubusercontent.com/ratulbd/digital-signage/main/config/server.json"
+
+    data class ServerConfig(
+        val apiUrl: String?,
+        val webTvUrl: String?,
+        val cmsUrl: String?,
+        val latestAppVersion: Int?,
+        val latestAppVersionName: String?,
+        val apkUrl: String?,
+        val releaseNotes: String?
+    )
+
+    data class AppVersionInfo(
+        val versionCode: Int,
+        val versionName: String,
+        val apkUrl: String,
+        val releaseNotes: String?
+    )
+
+    private var baseUrl = DEFAULT_SERVER_URL + "/api"
     private val gson = Gson()
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -30,6 +50,74 @@ object ApiClient {
     }
 
     fun getBaseUrl(): String = baseUrl
+
+    suspend fun resolveServerUrl(cachedUrl: String? = null): String = withContext(Dispatchers.IO) {
+        try {
+            val fastClient = OkHttpClient.Builder()
+                .connectTimeout(2500, TimeUnit.MILLISECONDS)
+                .readTimeout(2500, TimeUnit.MILLISECONDS)
+                .build()
+            val req = Request.Builder().url(GITHUB_CONFIG_URL).build()
+            fastClient.newCall(req).execute().use { res ->
+                if (res.isSuccessful) {
+                    val body = res.body?.string() ?: ""
+                    val config = gson.fromJson(body, ServerConfig::class.java)
+                    if (!config.apiUrl.isNullOrBlank()) {
+                        Log.d("ApiClient", "Resolved dynamic server URL from GitHub config: ${config.apiUrl}")
+                        setBaseUrl(config.apiUrl)
+                        return@withContext config.apiUrl
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("ApiClient", "GitHub config lookup skipped or failed: ${e.message}")
+        }
+
+        val fallback = if (!cachedUrl.isNullOrBlank()) cachedUrl else DEFAULT_SERVER_URL
+        Log.d("ApiClient", "Using fallback server URL: $fallback")
+        setBaseUrl(fallback)
+        fallback
+    }
+
+    suspend fun checkAppVersion(): AppVersionInfo? = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("$baseUrl/app/version")
+                .header("Cache-Control", "no-cache")
+                .build()
+            client.newCall(req).execute().use { res ->
+                if (res.isSuccessful) {
+                    val body = res.body?.string() ?: return@use null
+                    return@withContext gson.fromJson(body, AppVersionInfo::class.java)
+                }
+                null
+            }
+        } catch (e: Exception) {
+            Log.w("ApiClient", "Direct app/version check failed: ${e.message}")
+        }
+
+        try {
+            val req = Request.Builder().url(GITHUB_CONFIG_URL).build()
+            client.newCall(req).execute().use { res ->
+                if (res.isSuccessful) {
+                    val body = res.body?.string() ?: return@use null
+                    val config = gson.fromJson(body, ServerConfig::class.java)
+                    if (config.latestAppVersion != null && !config.apkUrl.isNullOrBlank()) {
+                        return@withContext AppVersionInfo(
+                            versionCode = config.latestAppVersion,
+                            versionName = config.latestAppVersionName ?: "latest",
+                            apkUrl = config.apkUrl,
+                            releaseNotes = config.releaseNotes
+                        )
+                    }
+                }
+                null
+            }
+        } catch (e: Exception) {
+            Log.w("ApiClient", "GitHub app/version check failed: ${e.message}")
+        }
+        null
+    }
 
     private fun jsonBody(json: String) = json.toRequestBody("application/json".toMediaType())
 

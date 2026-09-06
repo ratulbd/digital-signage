@@ -188,6 +188,17 @@ export default function DevicesPage() {
           <p className="aether-header-sub">{devices.length} device{devices.length !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex gap-2">
+          <a
+            href="https://tv.sbmoffice.net/DeshITDash-TV.apk"
+            target="_blank"
+            rel="noopener noreferrer"
+            download="DeshITDash-TV.apk"
+            className="aether-btn-ghost !text-purple-400 !border-purple-500/30 hover:!bg-purple-500/10 flex items-center gap-2"
+            title="Download Android TV App (APK)"
+          >
+            <Icon name="android" className="text-sm text-purple-400" />
+            Download TV App
+          </a>
           <button onClick={() => setShowForm(!showForm)} className="aether-btn">
             <Icon name={showForm ? 'close' : 'add'} className="text-sm" />
             {showForm ? 'Cancel' : 'Add Device'}

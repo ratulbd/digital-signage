@@ -18,6 +18,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.animation.doOnEnd
 import androidx.core.view.WindowCompat
@@ -86,15 +87,15 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var ttsRenderId = 0
     private var currentTtsLocale: Locale? = null
 
+    private lateinit var updateManager: UpdateManager
+
     private val handler = Handler(Looper.getMainLooper())
     private var heartbeatRunnable: Runnable? = null
     private var imageRunnable: Runnable? = null
     private var guardRunnable: Runnable? = null
-    private var hideUiRunnable: Runnable? = null
 
     private val TAG = "PlayerActivity"
     private val IMAGE_DURATION_MS = 10000L
-    private val UI_HIDE_DELAY_MS = 5000L
     private val CROSSFADE_DURATION_MS = 600L
 
     // Browser-matched messages
@@ -120,6 +121,8 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         initPlayer()
         initTts()
+        updateManager = UpdateManager(this)
+        updateManager.startPeriodicChecks()
         connectSocket()
         startHeartbeat()
         startPlaylistGuard()
@@ -168,27 +171,11 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private fun setupUiInteractions() {
         tapOverlay.setOnClickListener {
-            showUiTemporarily()
+            deviceInfoPill.alpha = 1f
+            if (schedule.isNotEmpty() || (isOverrideActive && overrideItem != null)) {
+                scheduleInfoPill.alpha = 1f
+            }
         }
-
-        // Auto-hide UI after delay
-        hideUiRunnable = Runnable { hidePlaybackUi() }
-        handler.postDelayed(hideUiRunnable!!, UI_HIDE_DELAY_MS)
-    }
-
-    private fun showUiTemporarily() {
-        deviceInfoPill.animate().alpha(1f).setDuration(200).start()
-        if (schedule.isNotEmpty() || (isOverrideActive && overrideItem != null)) {
-            scheduleInfoPill.animate().alpha(1f).setDuration(200).start()
-        }
-
-        handler.removeCallbacks(hideUiRunnable!!)
-        handler.postDelayed(hideUiRunnable!!, UI_HIDE_DELAY_MS)
-    }
-
-    private fun hidePlaybackUi() {
-        scheduleInfoPill.animate().alpha(0f).setDuration(400).start()
-        // Keep device info pill always visible (like browser)
     }
 
     private fun showResetDialog() {
@@ -254,6 +241,8 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private var rawScheduleItems: List<ScheduleItem> = emptyList()
+
     private fun connectSocket() {
         socketManager = SocketManager(
             deviceId = deviceId,
@@ -284,6 +273,21 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             },
             onSync = {
                 lifecycleScope.launch { loadSchedule() }
+            },
+            onUpdate = { versionCode, apkUrl, changelog ->
+                runOnUiThread {
+                    updateManager.checkForUpdate(silent = false, forcedApkUrl = apkUrl, targetVersion = versionCode)
+                }
+            },
+            onMigrate = { newServerUrl ->
+                runOnUiThread {
+                    ApiClient.setBaseUrl(newServerUrl)
+                    getSharedPreferences("tv_prefs", MODE_PRIVATE).edit()
+                        .putString("server_url", newServerUrl)
+                        .apply()
+                    Toast.makeText(this@PlayerActivity, "Server migrated to: $newServerUrl", Toast.LENGTH_LONG).show()
+                    lifecycleScope.launch { loadSchedule() }
+                }
             }
         )
         socketManager?.connect()
@@ -305,57 +309,84 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         guardRunnable = object : Runnable {
             override fun run() {
                 if (!isOverrideActive) {
-                    lifecycleScope.launch { loadSchedule() }
+                    evaluateAndSyncSchedule()
                 }
-                handler.postDelayed(this, 60000)
+
+                // Precision boundary timing
+                val nowMs = System.currentTimeMillis()
+                val msToNextMinute = 60000L - (nowMs % 60000L)
+
+                // High frequency (3s) check when idle to catch schedule start with 0s delay;
+                // Otherwise re-check right on the minute boundary + 100ms.
+                val delayMs = if (schedule.isEmpty()) {
+                    3000L.coerceAtMost(msToNextMinute)
+                } else {
+                    msToNextMinute + 100L
+                }
+                handler.postDelayed(this, delayMs)
             }
         }
-        handler.postDelayed(guardRunnable!!, 60000)
+        handler.post(guardRunnable!!)
+    }
+
+    private fun evaluateAndSyncSchedule() {
+        if (rawScheduleItems.isEmpty()) {
+            lifecycleScope.launch { loadSchedule() }
+            return
+        }
+        val active = filterActiveItems(rawScheduleItems)
+        updateActiveSchedule(active)
     }
 
     private suspend fun loadSchedule() {
         try {
             val items = ApiClient.fetchSchedule(deviceId, deviceToken)
+            rawScheduleItems = items
             val active = filterActiveItems(items)
-
-            val wasEmpty = schedule.isEmpty()
-            val isNowEmpty = active.isEmpty()
-
-            if (isNowEmpty && !wasEmpty) {
-                // Schedule just ended — hard stop everything
-                runOnUiThread { stopAllPlayback() }
-            }
-
-            if (isNowEmpty && wasEmpty) {
-                // Still empty — show no-content (idempotent)
-                runOnUiThread { showNoContent(MSG_NO_CONTENT_TITLE, MSG_NO_CONTENT_SUBTITLE) }
-            }
-
-            if (active != schedule) {
-                schedule = active
-                Log.d(TAG, "Schedule loaded: ${active.size} items")
-                if (!isOverrideActive) {
-                    runOnUiThread {
-                        currentIndex = 0
-                        playCurrent()
-                    }
-                }
-            }
+            updateActiveSchedule(active)
         } catch (e: Exception) {
             Log.e(TAG, "Schedule load failed", e)
+        }
+    }
+
+    private fun updateActiveSchedule(active: List<ScheduleItem>) {
+        val wasEmpty = schedule.isEmpty()
+        val isNowEmpty = active.isEmpty()
+
+        if (isNowEmpty && !wasEmpty) {
+            // Schedule strictly ended at this second — halt immediately
+            runOnUiThread { stopAllPlayback() }
+        }
+
+        if (isNowEmpty && wasEmpty) {
+            // Still empty — show waiting card
+            runOnUiThread { showNoContent(MSG_NO_CONTENT_TITLE, MSG_NO_CONTENT_SUBTITLE) }
+        }
+
+        if (active != schedule) {
+            schedule = active
+            Log.d(TAG, "Active schedule updated: ${active.size} items")
+            if (!isOverrideActive) {
+                runOnUiThread {
+                    currentIndex = 0
+                    playCurrent()
+                }
+            }
         }
     }
 
     private fun filterActiveItems(items: List<ScheduleItem>): List<ScheduleItem> {
         val now = Date()
         val cal = java.util.Calendar.getInstance()
-        val timeNow = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+        val secondsNow = cal.get(java.util.Calendar.HOUR_OF_DAY) * 3600 +
+                         cal.get(java.util.Calendar.MINUTE) * 60 +
+                         cal.get(java.util.Calendar.SECOND)
+
         return items.filter { item ->
             val type = (item.type ?: "image").lowercase()
             // Accept video, image, text, pdf, docx
             if (type != "video" && type != "image" && type != "text" &&
                 type != "pdf" && type != "docx" && type != "document") {
-                // Also check URL extension as fallback
                 val ext = item.url?.substringAfterLast('.', "")?.lowercase() ?: ""
                 if (ext !in listOf("mp4", "webm", "ogg", "mov", "mkv", "jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "docx")) {
                     return@filter false
@@ -371,15 +402,22 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             } catch (_: Exception) { true }
 
             val timeOk = try {
-                val start = item.startTime?.let {
+                val startSec = item.startTime?.let {
                     val parts = it.split(":")
-                    parts[0].toInt() * 60 + parts[1].toInt()
+                    val h = parts.getOrNull(0)?.toIntOrNull() ?: 0
+                    val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                    val s = parts.getOrNull(2)?.toIntOrNull() ?: 0
+                    h * 3600 + m * 60 + s
                 }
-                val end = item.endTime?.let {
+                val endSec = item.endTime?.let {
                     val parts = it.split(":")
-                    parts[0].toInt() * 60 + parts[1].toInt()
+                    val h = parts.getOrNull(0)?.toIntOrNull() ?: 0
+                    val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                    val s = parts.getOrNull(2)?.toIntOrNull() ?: 0
+                    h * 3600 + m * 60 + s
                 }
-                (start == null || start <= timeNow) && (end == null || end >= timeNow)
+                // Schedule is active if startSec <= current seconds and endSec > current seconds
+                (startSec == null || startSec <= secondsNow) && (endSec == null || endSec > secondsNow)
             } catch (_: Exception) { true }
 
             dateOk && timeOk && !item.url.isNullOrEmpty()
@@ -704,7 +742,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /** Shows schedule info pill matching browser #schedule-info design */
+    /** Shows schedule info pill matching browser #schedule-info design - permanently visible while playing */
     private fun showScheduleInfo(item: ScheduleItem) {
         val hierarchy = listOfNotNull(item.categoryName, item.contentTypeName)
             .filter { it.isNotBlank() }
@@ -715,18 +753,12 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         textTitle.text = title
 
         scheduleInfoPill.visibility = View.VISIBLE
-        scheduleInfoPill.alpha = 0f
-        scheduleInfoPill.animate()
-            .alpha(1f)
-            .setDuration(400)
-            .start()
-
-        handler.removeCallbacks(hideUiRunnable!!)
-        handler.postDelayed(hideUiRunnable!!, UI_HIDE_DELAY_MS)
+        scheduleInfoPill.alpha = 1f
     }
 
     private fun hideScheduleInfo() {
-        scheduleInfoPill.animate().alpha(0f).setDuration(400).start()
+        scheduleInfoPill.visibility = View.GONE
+        scheduleInfoPill.alpha = 0f
     }
 
     private fun reportPlayback(mediaId: String, event: String) {
@@ -766,7 +798,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         heartbeatRunnable?.let { handler.removeCallbacks(it) }
         imageRunnable?.let { handler.removeCallbacks(it) }
         guardRunnable?.let { handler.removeCallbacks(it) }
-        hideUiRunnable?.let { handler.removeCallbacks(it) }
+        updateManager.stopPeriodicChecks()
         socketManager?.disconnect()
         player?.release()
         player = null

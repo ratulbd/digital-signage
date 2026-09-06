@@ -83,12 +83,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         // If already paired, try to validate and auto-launch
-        if (!deviceId.isNullOrEmpty() && !token.isNullOrEmpty() && savedServerUrl != null) {
-            ApiClient.setBaseUrl(savedServerUrl)
+        if (!deviceId.isNullOrEmpty() && !token.isNullOrEmpty()) {
             progress.visibility = View.VISIBLE
-            textSearchStatus.text = "Checking saved pairing..."
+            textSearchStatus.text = "Connecting to server..."
             statusText.text = ""
             lifecycleScope.launch {
+                val resolvedUrl = ApiClient.resolveServerUrl(savedServerUrl)
+                discoveredUrl = resolvedUrl
+                prefs.edit().putString(KEY_SERVER_URL, resolvedUrl).apply()
+
                 val isValid = try {
                     ApiClient.validateDevice(deviceId, token)
                 } catch (e: Exception) {
@@ -98,89 +101,57 @@ class MainActivity : AppCompatActivity() {
                 if (isValid) {
                     launchPlayer(deviceId, token)
                 } else {
-                    prefs.edit().remove(KEY_DEVICE_ID).remove(KEY_DEVICE_TOKEN).remove(KEY_SERVER_URL).apply()
-                    val msg = "Previous pairing expired. Searching for server..."
+                    prefs.edit().remove(KEY_DEVICE_ID).remove(KEY_DEVICE_TOKEN).apply()
+                    val msg = "Previous pairing expired. Ready to pair again."
                     statusText.text = msg
                     statusText.setTextColor(android.graphics.Color.parseColor("#aaaaaa"))
                     Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                     Log.w("TVPair", "Saved credentials invalid, cleared")
-                    startDiscovery()
+                    initCloudConnection(prefs)
                 }
             }
         } else {
-            startDiscovery()
+            initCloudConnection(prefs)
         }
     }
 
-    private fun startDiscovery() {
-        if (isDiscovering) return
-        isDiscovering = true
-        btnPair.isEnabled = false
-        manualIpContainer.visibility = View.GONE
+    private fun initCloudConnection(prefs: android.content.SharedPreferences) {
         progress.visibility = View.VISIBLE
-        textSearchStatus.text = "Searching for server on your network..."
+        textSearchStatus.text = "Connecting to server..."
         textSearchStatus.visibility = View.VISIBLE
         statusText.text = ""
-        textServerFound.visibility = View.GONE
-        discoveredUrl = null
+        manualIpContainer.visibility = View.GONE
+        btnPair.isEnabled = false
 
-        if (!isOnWifi()) {
-            progress.visibility = View.GONE
-            isDiscovering = false
-            showManualFallback("WiFi required. Connect to the same WiFi as your server, then tap Confirm Pairing to retry.")
-            return
+        // Long press server text allows manual URL override for developer testing
+        textServerFound.setOnLongClickListener {
+            manualIpContainer.visibility = if (manualIpContainer.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            true
         }
 
         lifecycleScope.launch {
-            val serverIp = discoverServer()
-            isDiscovering = false
+            val savedServerUrl = prefs.getString(KEY_SERVER_URL, null)
+            val resolvedUrl = ApiClient.resolveServerUrl(savedServerUrl)
+            discoveredUrl = resolvedUrl
+            prefs.edit().putString(KEY_SERVER_URL, resolvedUrl).apply()
+
             progress.visibility = View.GONE
-
-            if (serverIp != null) {
-                discoveredUrl = "http://$serverIp:3001"
-                ApiClient.setBaseUrl(discoveredUrl!!)
-                textSearchStatus.visibility = View.GONE
-                textServerFound.text = "Server found at $serverIp"
-                textServerFound.visibility = View.VISIBLE
-                statusText.text = "Ready to pair"
-                statusText.setTextColor(android.graphics.Color.parseColor("#4CAF50"))
-                btnPair.isEnabled = true
-                editCode.requestFocus()
-                Log.d("TVPair", "Auto-discovered server: $discoveredUrl")
-            } else {
-                showManualFallback("Server not found on your network.\n\nMake sure your PC and phone are on the same WiFi, then enter the PC's IP address below (find it by running 'ipconfig' on your PC).")
-            }
+            textSearchStatus.visibility = View.GONE
+            textServerFound.text = "Connected to Server"
+            textServerFound.visibility = View.VISIBLE
+            statusText.text = "Enter the 6-digit pairing code from CMS"
+            statusText.setTextColor(android.graphics.Color.parseColor("#4CAF50"))
+            btnPair.isEnabled = true
+            editCode.requestFocus()
+            Log.d("TVPair", "Auto-configured server: $discoveredUrl")
         }
-    }
-
-    private fun showManualFallback(msg: String) {
-        textSearchStatus.visibility = View.GONE
-        textServerFound.visibility = View.GONE
-        statusText.text = msg
-        statusText.setTextColor(android.graphics.Color.parseColor("#ef4444"))
-        manualIpContainer.visibility = View.VISIBLE
-        btnPair.isEnabled = true
-        btnPair.text = "Confirm Pairing"
-        // Change button behavior to try manual IP
-        btnPair.setOnClickListener {
-            val manualIp = editManualIp.text.toString().trim()
-            if (manualIp.isEmpty()) {
-                Toast.makeText(this, "Enter server IP from ipconfig", Toast.LENGTH_LONG).show()
-                return@setOnClickListener
-            }
-            val url = if (manualIp.startsWith("http")) manualIp else "http://$manualIp:3001"
-            discoveredUrl = url
-            ApiClient.setBaseUrl(url)
-            attemptPairing(getSharedPreferences(PREFS, Context.MODE_PRIVATE))
-        }
-        editManualIp.requestFocus()
     }
 
     private fun attemptPairing(prefs: android.content.SharedPreferences) {
         val code = editCode.text.toString().trim()
 
         if (discoveredUrl.isNullOrEmpty()) {
-            startDiscovery()
+            initCloudConnection(prefs)
             return
         }
 
@@ -240,66 +211,6 @@ class MainActivity : AppCompatActivity() {
                 Log.e("TVPair", fullError, e)
             }
         }
-    }
-
-    private suspend fun discoverServer(): String? = coroutineScope {
-        val subnet = getLocalSubnet() ?: return@coroutineScope null
-        Log.d("TVPair", "Scanning subnet: $subnet.1 - $subnet.254")
-
-        // Scan in chunks to avoid overwhelming the network
-        val chunkSize = 50
-        for (chunk in (1..254).chunked(chunkSize)) {
-            val jobs = chunk.map { i ->
-                async {
-                    val ip = "$subnet.$i"
-                    if (ApiClient.checkHealth(ip, timeoutMs = 800)) ip else null
-                }
-            }
-            val found = jobs.awaitAll().firstOrNull { it != null }
-            if (found != null) return@coroutineScope found
-        }
-        null
-    }
-
-    private fun getLocalSubnet(): String? {
-        val ip = getLocalIpAddress() ?: return null
-        val lastDot = ip.lastIndexOf('.')
-        if (lastDot < 0) return null
-        return ip.substring(0, lastDot)
-    }
-
-    private fun getLocalIpAddress(): String? {
-        try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val iface = interfaces.nextElement()
-                if (iface.isLoopback || !iface.isUp) continue
-                val name = iface.name.lowercase()
-                if (name.contains("tun") || name.contains("ppp") || name.contains("vpn")) continue
-
-                val addresses = iface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val addr = addresses.nextElement()
-                    if (addr.isLoopbackAddress || addr !is Inet4Address) continue
-                    val host = addr.hostAddress
-                    if (host != null && !host.startsWith("127.")) {
-                        Log.d("TVPair", "Local IP on ${iface.name}: $host")
-                        return host
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("TVPair", "Failed to get local IP", e)
-        }
-        return null
-    }
-
-    private fun isOnWifi(): Boolean {
-        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = cm.activeNetwork ?: return false
-        val caps = cm.getNetworkCapabilities(network) ?: return false
-        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-               caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
     }
 
     private fun showError(msg: String) {

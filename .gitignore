@@ -35,9 +35,9 @@ android-tv-native/*.iml
 # Screen recordings & large media files
 *.mp4
 *.mov
-*.avi
 *.mkv
 *.apk
+!android-tv/public/*.apk
 
 # Scratch and temporary scripts
 scratch/

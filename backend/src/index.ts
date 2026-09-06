@@ -19,6 +19,7 @@ import { circleRouter } from './routes/circles'
 import { companyRouter } from './routes/companies'
 import { auditRouter } from './routes/audit'
 import { healthRouter } from './routes/health'
+import { appUpdateRouter } from './routes/appUpdate'
 import { setupSocketHandlers } from './services/socket'
 import { isS3Enabled, setupS3Bucket } from './services/s3'
 import { register, activeDevicesGauge } from './services/metrics'
@@ -50,6 +51,7 @@ app.use('/api/subcenters', subcenterRouter)
 app.use('/api/circles', circleRouter)
 app.use('/api/companies', companyRouter)
 app.use('/api/audit-logs', auditRouter)
+app.use('/api/app', appUpdateRouter)
 app.use('/health', healthRouter)
 app.get('/metrics', async (req, res) => {
   res.set('Content-Type', register.contentType)
