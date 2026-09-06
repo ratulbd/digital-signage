@@ -2,8 +2,8 @@
   "apiUrl": "https://api.sbmoffice.net",
   "webTvUrl": "https://tv.sbmoffice.net",
   "cmsUrl": "https://dash.sbmoffice.net",
-  "latestAppVersion": 2,
-  "latestAppVersionName": "1.1",
+  "latestAppVersion": 3,
+  "latestAppVersionName": "1.2",
   "apkUrl": "https://tv.sbmoffice.net/DeshITDash-TV.apk",
-  "releaseNotes": "Exact-second schedule synchronization, permanent content tags, and background auto-update."
+  "releaseNotes": "Calibrated server clock synchronization, live BST clock overlay, and instant schedule matching."
 }

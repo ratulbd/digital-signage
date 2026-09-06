@@ -49,6 +49,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var infoSubtitle: TextView
     private lateinit var deviceInfoPill: LinearLayout
     private lateinit var textSubcenter: TextView
+    private lateinit var textLiveClock: TextView
     private lateinit var scheduleInfoPill: LinearLayout
     private lateinit var textMeta: TextView
     private lateinit var textTitle: TextView
@@ -94,6 +95,23 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var imageRunnable: Runnable? = null
     private var guardRunnable: Runnable? = null
 
+    private val clockRunnable = object : Runnable {
+        override fun run() {
+            try {
+                val cal = ApiClient.getCalibratedCalendar()
+                val timeFmt = SimpleDateFormat("hh:mm:ss a", Locale.US).apply {
+                    timeZone = ApiClient.OPERATIONAL_TIMEZONE
+                }
+                textLiveClock.text = timeFmt.format(cal.time)
+
+                if (schedule.isEmpty() && infoContainer.visibility == View.VISIBLE) {
+                    updateWaitingDiagnostics()
+                }
+            } catch (_: Exception) {}
+            handler.postDelayed(this, 1000L)
+        }
+    }
+
     private val TAG = "PlayerActivity"
     private val IMAGE_DURATION_MS = 10000L
     private val CROSSFADE_DURATION_MS = 600L
@@ -126,6 +144,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         connectSocket()
         startHeartbeat()
         startPlaylistGuard()
+        handler.post(clockRunnable)
 
         lifecycleScope.launch {
             loadSchedule()
@@ -140,6 +159,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         infoSubtitle = findViewById(R.id.infoSubtitle)
         deviceInfoPill = findViewById(R.id.deviceInfoPill)
         textSubcenter = findViewById(R.id.textSubcenter)
+        textLiveClock = findViewById(R.id.textLiveClock)
         scheduleInfoPill = findViewById(R.id.scheduleInfoPill)
         textMeta = findViewById(R.id.textMeta)
         textTitle = findViewById(R.id.textTitle)
@@ -305,6 +325,8 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         handler.post(heartbeatRunnable!!)
     }
 
+    private var lastScheduleFetchMs: Long = 0L
+
     private fun startPlaylistGuard() {
         guardRunnable = object : Runnable {
             override fun run() {
@@ -316,10 +338,10 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val nowMs = System.currentTimeMillis()
                 val msToNextMinute = 60000L - (nowMs % 60000L)
 
-                // High frequency (3s) check when idle to catch schedule start with 0s delay;
+                // High frequency (2s) check when idle to catch schedule start with 0s delay;
                 // Otherwise re-check right on the minute boundary + 100ms.
                 val delayMs = if (schedule.isEmpty()) {
-                    3000L.coerceAtMost(msToNextMinute)
+                    2000L.coerceAtMost(msToNextMinute)
                 } else {
                     msToNextMinute + 100L
                 }
@@ -330,7 +352,10 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun evaluateAndSyncSchedule() {
-        if (rawScheduleItems.isEmpty()) {
+        val nowMs = System.currentTimeMillis()
+        // If playlist is empty, re-query server every 10 seconds to catch newly scheduled CMS items
+        if (rawScheduleItems.isEmpty() || (schedule.isEmpty() && nowMs - lastScheduleFetchMs > 10000L)) {
+            lastScheduleFetchMs = nowMs
             lifecycleScope.launch { loadSchedule() }
             return
         }
@@ -340,6 +365,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private suspend fun loadSchedule() {
         try {
+            lastScheduleFetchMs = System.currentTimeMillis()
             val items = ApiClient.fetchSchedule(deviceId, deviceToken)
             rawScheduleItems = items
             val active = filterActiveItems(items)
@@ -359,13 +385,17 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         if (isNowEmpty && wasEmpty) {
-            // Still empty — show waiting card
-            runOnUiThread { showNoContent(MSG_NO_CONTENT_TITLE, MSG_NO_CONTENT_SUBTITLE) }
+            // Still empty — show waiting card and update diagnostics
+            runOnUiThread {
+                updateWaitingDiagnostics()
+                showNoContent(MSG_NO_CONTENT_TITLE, MSG_NO_CONTENT_SUBTITLE)
+            }
         }
 
-        if (active != schedule) {
+        // Trigger playback if we have active items and (playlist changed OR playback is not currently playing)
+        if (active.isNotEmpty() && (active != schedule || currentMedia == null)) {
             schedule = active
-            Log.d(TAG, "Active schedule updated: ${active.size} items")
+            Log.d(TAG, "Active schedule matched: ${active.size} items — triggering playback")
             if (!isOverrideActive) {
                 runOnUiThread {
                     currentIndex = 0
@@ -375,12 +405,46 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun updateWaitingDiagnostics() {
+        if (schedule.isNotEmpty()) return
+        try {
+            val cal = ApiClient.getCalibratedCalendar()
+            val timeFmt = SimpleDateFormat("hh:mm:ss a", Locale.US).apply {
+                timeZone = ApiClient.OPERATIONAL_TIMEZONE
+            }
+            val currentTimeStr = timeFmt.format(cal.time)
+
+            val nextItem = rawScheduleItems.firstOrNull()
+            val subtitle = if (nextItem != null) {
+                val window = "${nextItem.startTime ?: "—"} to ${nextItem.endTime ?: "—"}"
+                val name = nextItem.contentName ?: nextItem.filename ?: "Content"
+                "Current Time: $currentTimeStr (BST)\nScheduled: $name ($window)"
+            } else {
+                "Current Time: $currentTimeStr (BST)\nCreate a schedule in the CMS dashboard to start playback"
+            }
+            infoSubtitle.text = subtitle
+        } catch (_: Exception) {}
+    }
+
+    private fun parseTimeToSeconds(timeStr: String?, defaultSecond: Int = 0): Int? {
+        if (timeStr.isNullOrBlank()) return null
+        val parts = timeStr.trim().split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull() ?: return null
+        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val s = parts.getOrNull(2)?.toIntOrNull() ?: defaultSecond
+        return h * 3600 + m * 60 + s
+    }
+
     private fun filterActiveItems(items: List<ScheduleItem>): List<ScheduleItem> {
-        val now = Date()
-        val cal = java.util.Calendar.getInstance()
+        val cal = ApiClient.getCalibratedCalendar()
         val secondsNow = cal.get(java.util.Calendar.HOUR_OF_DAY) * 3600 +
                          cal.get(java.util.Calendar.MINUTE) * 60 +
                          cal.get(java.util.Calendar.SECOND)
+
+        val fmtDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = ApiClient.OPERATIONAL_TIMEZONE
+        }
+        val todayStr = fmtDate.format(cal.time)
 
         return items.filter { item ->
             val type = (item.type ?: "image").lowercase()
@@ -393,31 +457,25 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
             }
 
+            // Robust string comparison on "yyyy-MM-dd"
             val dateOk = try {
-                val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val start = item.startDate?.let { fmt.parse(it.substring(0, 10.coerceAtMost(it.length))) }
-                val end = item.endDate?.let { fmt.parse(it.substring(0, 10.coerceAtMost(it.length))) }
-                val today = fmt.parse(fmt.format(now))
-                (start == null || !start.after(today)) && (end == null || !end.before(today))
+                val startStr = item.startDate?.let {
+                    if (it.length >= 10) it.substring(0, 10) else it
+                }
+                val endStr = item.endDate?.let {
+                    if (it.length >= 10) it.substring(0, 10) else it
+                }
+                (startStr == null || startStr <= todayStr) &&
+                (endStr == null || endStr >= todayStr)
             } catch (_: Exception) { true }
 
             val timeOk = try {
-                val startSec = item.startTime?.let {
-                    val parts = it.split(":")
-                    val h = parts.getOrNull(0)?.toIntOrNull() ?: 0
-                    val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                    val s = parts.getOrNull(2)?.toIntOrNull() ?: 0
-                    h * 3600 + m * 60 + s
-                }
-                val endSec = item.endTime?.let {
-                    val parts = it.split(":")
-                    val h = parts.getOrNull(0)?.toIntOrNull() ?: 0
-                    val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                    val s = parts.getOrNull(2)?.toIntOrNull() ?: 0
-                    h * 3600 + m * 60 + s
-                }
-                // Schedule is active if startSec <= current seconds and endSec > current seconds
-                (startSec == null || startSec <= secondsNow) && (endSec == null || endSec > secondsNow)
+                val startSec = parseTimeToSeconds(item.startTime, defaultSecond = 0)
+                // If endTime is e.g. "13:20", it means inclusive of that entire minute (13:20:59)
+                val endSec = parseTimeToSeconds(item.endTime, defaultSecond = 59)
+
+                (startSec == null || startSec <= secondsNow) &&
+                (endSec == null || endSec >= secondsNow)
             } catch (_: Exception) { true }
 
             dateOk && timeOk && !item.url.isNullOrEmpty()
@@ -798,6 +856,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         heartbeatRunnable?.let { handler.removeCallbacks(it) }
         imageRunnable?.let { handler.removeCallbacks(it) }
         guardRunnable?.let { handler.removeCallbacks(it) }
+        handler.removeCallbacks(clockRunnable)
         updateManager.stopPeriodicChecks()
         socketManager?.disconnect()
         player?.release()

@@ -36,13 +36,49 @@ object ApiClient {
         val releaseNotes: String?
     )
 
+    val OPERATIONAL_TIMEZONE: java.util.TimeZone = java.util.TimeZone.getTimeZone("Asia/Dhaka")
+
+    @Volatile
+    private var serverClockOffsetMs: Long = 0L
+    @Volatile
+    private var hasSyncedClock: Boolean = false
+
     private var baseUrl = DEFAULT_SERVER_URL + "/api"
     private val gson = Gson()
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            val dateHeader = response.header("Date")
+            if (!dateHeader.isNullOrBlank()) {
+                try {
+                    val format = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.US)
+                    val serverDate = format.parse(dateHeader)
+                    if (serverDate != null) {
+                        serverClockOffsetMs = serverDate.time - System.currentTimeMillis()
+                        hasSyncedClock = true
+                        Log.d("ApiClient", "Server clock calibrated: offset=${serverClockOffsetMs}ms (server: $dateHeader)")
+                    }
+                } catch (e: Exception) {
+                    Log.w("ApiClient", "Failed to parse server Date header: $dateHeader")
+                }
+            }
+            response
+        }
         .build()
+
+    fun getSyncedTimeMs(): Long = System.currentTimeMillis() + serverClockOffsetMs
+    fun getServerClockOffsetMs(): Long = serverClockOffsetMs
+    fun hasSyncedClock(): Boolean = hasSyncedClock
+
+    fun getCalibratedCalendar(): java.util.Calendar {
+        val cal = java.util.Calendar.getInstance(OPERATIONAL_TIMEZONE)
+        cal.timeInMillis = getSyncedTimeMs()
+        return cal
+    }
 
     fun setBaseUrl(url: String) {
         val cleanUrl = if (url.endsWith("/")) url.substring(0, url.length - 1) else url
@@ -50,6 +86,7 @@ object ApiClient {
     }
 
     fun getBaseUrl(): String = baseUrl
+    fun getServerRootUrl(): String = baseUrl.removeSuffix("/api")
 
     suspend fun resolveServerUrl(cachedUrl: String? = null): String = withContext(Dispatchers.IO) {
         try {

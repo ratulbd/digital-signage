@@ -20,7 +20,7 @@ class SocketManager(
 
     fun connect() {
         try {
-            val baseUrl = ApiClient.getBaseUrl().replace("/api", "")
+            val baseUrl = ApiClient.getServerRootUrl()
             socket = IO.socket(baseUrl, IO.Options().apply {
                 reconnection = true
                 reconnectionDelay = 1000

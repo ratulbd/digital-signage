@@ -114,6 +114,21 @@
             android:text="—"
             android:textColor="#ffffff"
             android:textSize="13sp" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="12dp"
+            android:layout_marginHorizontal="10dp"
+            android:background="#40ffffff" />
+
+        <TextView
+            android:id="@+id/textLiveClock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:text="--:--:--"
+            android:textColor="#38bdf8"
+            android:textSize="13sp" />
     </LinearLayout>
 
     <!-- Bottom-left schedule info pill (matches browser #schedule-info) -->
