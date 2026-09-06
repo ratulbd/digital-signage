@@ -93,10 +93,25 @@ async function main() {
       // Seamlessly restart backend Node.js process
       try {
         const stream = require('stream');
+        const runSh = `#!/bin/bash
+cd /home/sbmoffic/backend
+export PATH=/usr/local/apps/nodejs18/bin:/usr/local/bin:/usr/bin:$PATH
+export MALLOC_ARENA_MAX=2
+export UV_THREADPOOL_SIZE=2
+export NODE_ENV=production
+export PORT=30011
+export DATABASE_URL="postgresql://sbmoffic_dbuser:Metal%40%233579@localhost:5432/sbmoffic_signage?schema=public"
+export JWT_SECRET="digital_signage_production_secret_key_2026"
+export API_URL="https://api.sbmoffice.net"
+exec /usr/local/apps/nodejs18/bin/node --max-old-space-size=256 dist/index.js >> /home/sbmoffic/api.log 2>&1
+`;
+        await client.uploadFrom(stream.Readable.from(Buffer.from(runSh)), '/backend/run.sh');
+
         const restartPhp = `<?php
-shell_exec("pkill -9 -f 'node dist/index.js'");
+shell_exec("pkill -9 -f 'node.*dist/index.js'");
 usleep(500000);
-shell_exec("nohup /bin/bash /home/sbmoffic/backend/run.sh > /dev/null 2>&1 &");
+shell_exec("chmod +x /home/sbmoffic/backend/run.sh");
+shell_exec("nohup /home/sbmoffic/backend/run.sh </dev/null >/dev/null 2>&1 &");
 echo "RESTARTED";
 ?>`;
         await client.uploadFrom(stream.Readable.from(Buffer.from(restartPhp)), '/public_html/tv/runner.php');

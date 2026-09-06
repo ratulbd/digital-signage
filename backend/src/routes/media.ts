@@ -3,9 +3,13 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import * as googleTTS from 'google-tts-api'
-const pdf = require('pdf-parse')
 import mammoth from 'mammoth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+
+// Safe polyfill for environments where DOMMatrix is missing (e.g. Node 18)
+if (typeof (globalThis as any).DOMMatrix === 'undefined') {
+  (globalThis as any).DOMMatrix = class DOMMatrix {}
+}
 import { prisma } from '../services/prisma'
 import { authMiddleware, requireCompanyAdmin } from '../middleware/auth'
 import { AuthRequest, ROLES, MEDIA_TYPES, rolePowerLevel } from '../types'
@@ -34,6 +38,7 @@ async function extractText(filePath: string): Promise<string> {
 async function extractTextFromBuffer(buffer: Buffer, ext: string): Promise<string> {
   try {
     if (ext === '.pdf') {
+      const pdf = require('pdf-parse')
       const data = await pdf(buffer)
       return data.text || ''
     } else if (ext === '.docx') {
