@@ -8,10 +8,10 @@ const router = Router()
 
 // Default fallback configuration if server.json is not present
 const DEFAULT_CONFIG = {
-  versionCode: 4,
-  versionName: '1.3',
+  versionCode: 5,
+  versionName: '1.4',
   apkUrl: 'https://tv.sbmoffice.net/MPL-Dash-TV.apk',
-  releaseNotes: 'Zero-buffering local media cache, aggressive TV disk storage management, and precise schedule transitions.'
+  releaseNotes: 'Cancel/Exit/Reset 3-way dialog, persistent pairing preservation across app exits, and custom Metal brand app icon and TV launcher banner.'
 }
 
 function loadServerConfig() {

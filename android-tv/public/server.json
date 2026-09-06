@@ -2,8 +2,8 @@
   "apiUrl": "https://api.sbmoffice.net",
   "webTvUrl": "https://tv.sbmoffice.net",
   "cmsUrl": "https://dash.sbmoffice.net",
-  "latestAppVersion": 4,
-  "latestAppVersionName": "1.3",
+  "latestAppVersion": 5,
+  "latestAppVersionName": "1.4",
   "apkUrl": "https://tv.sbmoffice.net/MPL-Dash-TV.apk",
-  "releaseNotes": "Zero-buffering local media cache, aggressive TV disk storage management, and precise schedule transitions."
+  "releaseNotes": "Cancel/Exit/Reset 3-way dialog, persistent pairing preservation across app exits, and custom Metal brand app icon and TV launcher banner."
 }

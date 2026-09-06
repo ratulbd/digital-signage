@@ -218,16 +218,34 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 scheduleInfoPill.alpha = 1f
             }
         }
+        deviceInfoPill.setOnLongClickListener {
+            showExitOrResetDialog()
+            true
+        }
     }
 
-    private fun showResetDialog() {
+    private fun showExitOrResetDialog() {
         android.app.AlertDialog.Builder(this)
-            .setTitle("Reset Device")
-            .setMessage("Clear all pairing data and return to setup?")
-            .setPositiveButton("Reset") { _, _ ->
-                getSharedPreferences("tv_prefs", MODE_PRIVATE).edit().clear().apply()
-                startActivity(android.content.Intent(this, MainActivity::class.java))
-                finish()
+            .setTitle("Exit or Reset")
+            .setMessage("Do you want to exit the app or reset device pairing?\n\n• Exit: Closes the app while keeping pairing intact.\n• Reset: Clears pairing data to pair with a new code.\n• Cancel: Returns to playback.")
+            .setPositiveButton("Exit") { _, _ ->
+                // Exit app cleanly; pairing credentials remain saved
+                finishAffinity()
+            }
+            .setNeutralButton("Reset") { _, _ ->
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Confirm Reset")
+                    .setMessage("Are you sure you want to clear pairing and return to setup?")
+                    .setPositiveButton("Reset") { _, _ ->
+                        getSharedPreferences("tv_prefs", MODE_PRIVATE).edit().clear().apply()
+                        val intent = android.content.Intent(this, MainActivity::class.java).apply {
+                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        }
+                        startActivity(intent)
+                        finish()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
             }
             .setNegativeButton("Cancel", null)
             .show()
@@ -1010,7 +1028,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        showResetDialog()
+        showExitOrResetDialog()
     }
 
     override fun onPause() {

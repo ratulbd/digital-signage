@@ -82,32 +82,32 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
 
-        // If already paired, try to validate and auto-launch
+        // If already paired, auto-launch PlayerActivity without re-pairing
         if (!deviceId.isNullOrEmpty() && !token.isNullOrEmpty()) {
             progress.visibility = View.VISIBLE
-            textSearchStatus.text = "Connecting to server..."
+            textSearchStatus.text = "Starting player..."
             statusText.text = ""
             lifecycleScope.launch {
                 val resolvedUrl = ApiClient.resolveServerUrl(savedServerUrl)
                 discoveredUrl = resolvedUrl
                 prefs.edit().putString(KEY_SERVER_URL, resolvedUrl).apply()
 
-                val isValid = try {
-                    ApiClient.validateDevice(deviceId, token)
-                } catch (e: Exception) {
-                    false
-                }
+                val statusCode = ApiClient.validateDeviceStatus(deviceId, token)
                 progress.visibility = View.GONE
-                if (isValid) {
-                    launchPlayer(deviceId, token)
-                } else {
+                
+                // Only clear pairing if server explicitly rejects with 401 Unauthorized or 404 Not Found
+                if (statusCode == 401 || statusCode == 403 || statusCode == 404) {
                     prefs.edit().remove(KEY_DEVICE_ID).remove(KEY_DEVICE_TOKEN).apply()
                     val msg = "Previous pairing expired. Ready to pair again."
                     statusText.text = msg
                     statusText.setTextColor(android.graphics.Color.parseColor("#aaaaaa"))
                     Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-                    Log.w("TVPair", "Saved credentials invalid, cleared")
+                    Log.w("TVPair", "Saved credentials rejected by server ($statusCode), cleared")
                     initCloudConnection(prefs)
+                } else {
+                    // Success (200) or temporarily offline (-1) -> seamlessly launch PlayerActivity!
+                    Log.d("TVPair", "Launching player with saved pairing (validation status: $statusCode)")
+                    launchPlayer(deviceId, token)
                 }
             }
         } else {

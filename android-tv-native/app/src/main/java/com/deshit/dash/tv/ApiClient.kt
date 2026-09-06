@@ -178,6 +178,11 @@ object ApiClient {
     }
 
     suspend fun validateDevice(deviceId: String, token: String): Boolean = withContext(Dispatchers.IO) {
+        val code = validateDeviceStatus(deviceId, token)
+        code in 200..299
+    }
+
+    suspend fun validateDeviceStatus(deviceId: String, token: String): Int = withContext(Dispatchers.IO) {
         try {
             val req = Request.Builder()
                 .url("$baseUrl/devices/$deviceId/schedule")
@@ -186,11 +191,11 @@ object ApiClient {
                 .build()
             client.newCall(req).execute().use { res ->
                 Log.d("ApiClient", "Validate device [${res.code}]")
-                res.isSuccessful
+                res.code
             }
         } catch (e: Exception) {
-            Log.e("ApiClient", "Validate failed: ${e.javaClass.simpleName}: ${e.message}")
-            false
+            Log.w("ApiClient", "Validate network error: ${e.message}")
+            -1 // Offline or unreachable
         }
     }
 
