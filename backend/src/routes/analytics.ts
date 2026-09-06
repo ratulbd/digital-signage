@@ -177,14 +177,33 @@ const calculateTotalHours = (logs: any[], devices: any[]) => {
   return totalMs / (1000 * 60 * 60)
 }
 
+// Helper function to resolve role-scoped device filters
+function getDeviceWhereForUser(user?: AuthRequest['user']): any {
+  if (!user) return { id: 'none' }
+  if (user.role === ROLES.CENTRAL_ADMIN) {
+    return {}
+  }
+  if (user.role === ROLES.COMPANY_ADMIN && user.companyId) {
+    return {
+      subcenter: {
+        circle: { companyId: user.companyId },
+      },
+    }
+  }
+  if (user.role === ROLES.CIRCLE_ADMIN && user.circleId) {
+    return {
+      subcenter: { circleId: user.circleId },
+    }
+  }
+  if (user.role === ROLES.SUBCENTER_ADMIN && user.subcenterId) {
+    return { subcenterId: user.subcenterId }
+  }
+  return { id: 'none' }
+}
+
 router.get('/dashboard', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const subcenterFilter =
-      req.user?.role === ROLES.SUBCENTER_ADMIN && req.user.subcenterId
-        ? { subcenterId: req.user.subcenterId }
-        : {}
-
-    const deviceWhere = subcenterFilter
+    const deviceWhere = getDeviceWhereForUser(req.user)
 
     const totalDevices = await prisma.device.count({ where: deviceWhere })
     const onlineDevicesCount = await prisma.device.count({
@@ -405,8 +424,11 @@ router.get('/reports', authMiddleware, async (req: AuthRequest, res) => {
       where.deviceId = deviceId as string
     } else if (subcenterId) {
       where.device = { subcenterId: subcenterId as string }
-    } else if (req.user?.role === ROLES.SUBCENTER_ADMIN) {
-      where.device = { subcenterId: req.user.subcenterId }
+    } else {
+      const scopedDeviceWhere = getDeviceWhereForUser(req.user)
+      if (Object.keys(scopedDeviceWhere).length > 0) {
+        where.device = scopedDeviceWhere
+      }
     }
 
     const logs = await prisma.playbackLog.findMany({
