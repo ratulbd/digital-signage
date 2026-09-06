@@ -8,10 +8,10 @@ const router = Router()
 
 // Default fallback configuration if server.json is not present
 const DEFAULT_CONFIG = {
-  versionCode: 2,
-  versionName: '1.1',
+  versionCode: 3,
+  versionName: '1.2',
   apkUrl: 'https://tv.sbmoffice.net/DeshITDash-TV.apk',
-  releaseNotes: 'Exact-second schedule synchronization, permanent content tags, and background auto-update.'
+  releaseNotes: 'Calibrated server clock synchronization, live BST clock overlay, and instant schedule matching.'
 }
 
 function loadServerConfig() {
