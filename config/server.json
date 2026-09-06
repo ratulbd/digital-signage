@@ -4,6 +4,6 @@
   "cmsUrl": "https://dash.sbmoffice.net",
   "latestAppVersion": 3,
   "latestAppVersionName": "1.2",
-  "apkUrl": "https://tv.sbmoffice.net/DeshITDash-TV.apk",
+  "apkUrl": "https://tv.sbmoffice.net/MPL-Dash-TV.apk",
   "releaseNotes": "Calibrated server clock synchronization, live BST clock overlay, and instant schedule matching."
 }

@@ -10,7 +10,7 @@ const router = Router()
 const DEFAULT_CONFIG = {
   versionCode: 3,
   versionName: '1.2',
-  apkUrl: 'https://tv.sbmoffice.net/DeshITDash-TV.apk',
+  apkUrl: 'https://tv.sbmoffice.net/MPL-Dash-TV.apk',
   releaseNotes: 'Calibrated server clock synchronization, live BST clock overlay, and instant schedule matching.'
 }
 

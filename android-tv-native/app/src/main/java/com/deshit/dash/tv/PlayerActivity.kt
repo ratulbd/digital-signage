@@ -807,7 +807,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .joinToString(" → ")
         val title = item.contentName ?: item.filename ?: "Now Playing"
 
-        textMeta.text = hierarchy.ifEmpty { "Digital Signage System" }
+        textMeta.text = hierarchy.ifEmpty { "MPL-Dash-TV System" }
         textTitle.text = title
 
         scheduleInfoPill.visibility = View.VISIBLE

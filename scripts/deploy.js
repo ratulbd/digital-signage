@@ -89,6 +89,18 @@ async function main() {
       await client.ensureDir('backend/dist');
       await client.uploadFromDir(path.join(rootDir, 'backend', 'dist'));
       console.log('✅ Backend code updated! (https://api.sbmoffice.net)');
+
+      // Restart Passenger Node.js app via tmp/restart.txt
+      try {
+        await client.cd('/');
+        await client.ensureDir('backend/tmp');
+        const stream = require('stream');
+        const readable = stream.Readable.from(Buffer.from(Date.now().toString()));
+        await client.uploadFrom(readable, 'restart.txt');
+        console.log('🔄 Passenger Node.js application restarted!');
+      } catch (e) {
+        console.log('ℹ️ Note: tmp/restart.txt touch skipped:', e.message);
+      }
     }
 
     console.log('\n====================================================');
