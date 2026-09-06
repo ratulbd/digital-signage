@@ -34,7 +34,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
 import com.bumptech.glide.Glide
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,9 +49,16 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var infoContainer: LinearLayout
     private lateinit var infoTitle: TextView
     private lateinit var infoSubtitle: TextView
+    private lateinit var downloadProgressContainer: LinearLayout
+    private lateinit var textDownloadTitle: TextView
+    private lateinit var textDownloadPercent: TextView
+    private lateinit var downloadProgressBar: ProgressBar
+    private lateinit var textDownloadStats: TextView
     private lateinit var deviceInfoPill: LinearLayout
     private lateinit var textSubcenter: TextView
     private lateinit var textLiveClock: TextView
+    private lateinit var textAppVersion: TextView
+    private lateinit var infoAppVersion: TextView
     private lateinit var scheduleInfoPill: LinearLayout
     private lateinit var textMeta: TextView
     private lateinit var textTitle: TextView
@@ -157,9 +166,16 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         infoContainer = findViewById(R.id.infoContainer)
         infoTitle = findViewById(R.id.infoTitle)
         infoSubtitle = findViewById(R.id.infoSubtitle)
+        downloadProgressContainer = findViewById(R.id.downloadProgressContainer)
+        textDownloadTitle = findViewById(R.id.textDownloadTitle)
+        textDownloadPercent = findViewById(R.id.textDownloadPercent)
+        downloadProgressBar = findViewById(R.id.downloadProgressBar)
+        textDownloadStats = findViewById(R.id.textDownloadStats)
         deviceInfoPill = findViewById(R.id.deviceInfoPill)
         textSubcenter = findViewById(R.id.textSubcenter)
         textLiveClock = findViewById(R.id.textLiveClock)
+        textAppVersion = findViewById(R.id.textAppVersion)
+        infoAppVersion = findViewById(R.id.infoAppVersion)
         scheduleInfoPill = findViewById(R.id.scheduleInfoPill)
         textMeta = findViewById(R.id.textMeta)
         textTitle = findViewById(R.id.textTitle)
@@ -185,7 +201,13 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         deviceName = prefs.getString("device_name", "TV Player") ?: "TV Player"
         subcenterName = prefs.getString("subcenter_name", "") ?: ""
 
+        val versionName = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.3"
+        } catch (_: Exception) { "1.3" }
+
         textSubcenter.text = subcenterName.ifEmpty { "—" }
+        textAppVersion.text = "v$versionName"
+        infoAppVersion.text = "MPL-Dash-TV v$versionName"
         deviceInfoPill.visibility = View.VISIBLE
     }
 
@@ -333,19 +355,8 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 if (!isOverrideActive) {
                     evaluateAndSyncSchedule()
                 }
-
-                // Precision boundary timing
-                val nowMs = System.currentTimeMillis()
-                val msToNextMinute = 60000L - (nowMs % 60000L)
-
-                // High frequency (2s) check when idle to catch schedule start with 0s delay;
-                // Otherwise re-check right on the minute boundary + 100ms.
-                val delayMs = if (schedule.isEmpty()) {
-                    2000L.coerceAtMost(msToNextMinute)
-                } else {
-                    msToNextMinute + 100L
-                }
-                handler.postDelayed(this, delayMs)
+                // High precision 1-second boundary check to stop/transition immediately when schedule hits
+                handler.postDelayed(this, 1000L)
             }
         }
         handler.post(guardRunnable!!)
@@ -370,8 +381,30 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             rawScheduleItems = items
             val active = filterActiveItems(items)
             updateActiveSchedule(active)
+
+            // Limited Storage Management: Aggressively purge cache files not in this schedule
+            val scheduledMediaIds = items.map { it.mediaId }.toSet()
+            MediaCacheManager.pruneUnused(this@PlayerActivity, scheduledMediaIds)
+
+            // Pre-cache all scheduled content in background for zero-buffering playback
+            preloadMedia(items)
         } catch (e: Exception) {
             Log.e(TAG, "Schedule load failed", e)
+        }
+    }
+
+    private fun preloadMedia(items: List<ScheduleItem>) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            for (item in items) {
+                if (item.url.isNullOrBlank()) continue
+                val type = getMediaType(item)
+                if (type == "video" || type == "image") {
+                    if (!MediaCacheManager.isCached(this@PlayerActivity, item)) {
+                        Log.d(TAG, "Pre-caching media in background: ${item.contentName ?: item.filename}")
+                        MediaCacheManager.downloadMedia(this@PlayerActivity, item)
+                    }
+                }
+            }
         }
     }
 
@@ -380,22 +413,34 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val isNowEmpty = active.isEmpty()
 
         if (isNowEmpty && !wasEmpty) {
-            // Schedule strictly ended at this second — halt immediately
-            runOnUiThread { stopAllPlayback() }
-        }
-
-        if (isNowEmpty && wasEmpty) {
-            // Still empty — show waiting card and update diagnostics
+            // Schedule strictly ended at this second — halt immediately and transition smoothly
             runOnUiThread {
+                schedule = emptyList()
+                stopAllPlayback()
                 updateWaitingDiagnostics()
                 showNoContent(MSG_NO_CONTENT_TITLE, MSG_NO_CONTENT_SUBTITLE)
             }
+            return
         }
 
-        // Trigger playback if we have active items and (playlist changed OR playback is not currently playing)
-        if (active.isNotEmpty() && (active != schedule || currentMedia == null)) {
+        if (isNowEmpty && wasEmpty) {
+            // Still empty — update waiting diagnostics
+            runOnUiThread {
+                updateWaitingDiagnostics()
+                if (infoContainer.visibility != View.VISIBLE) {
+                    showNoContent(MSG_NO_CONTENT_TITLE, MSG_NO_CONTENT_SUBTITLE)
+                }
+            }
+            return
+        }
+
+        // Active schedule is NOT empty:
+        val playlistChanged = active.map { it.mediaId } != schedule.map { it.mediaId }
+        val currentMediaExpired = currentMedia != null && active.none { it.mediaId == currentMedia?.mediaId }
+
+        if (active.isNotEmpty() && (playlistChanged || currentMediaExpired || currentMedia == null)) {
+            Log.d(TAG, "Active schedule updated: ${active.size} items (playlistChanged=$playlistChanged, expired=$currentMediaExpired)")
             schedule = active
-            Log.d(TAG, "Active schedule matched: ${active.size} items — triggering playback")
             if (!isOverrideActive) {
                 runOnUiThread {
                     currentIndex = 0
@@ -406,7 +451,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun updateWaitingDiagnostics() {
-        if (schedule.isNotEmpty()) return
+        if (schedule.isNotEmpty() || downloadProgressContainer.visibility == View.VISIBLE) return
         try {
             val cal = ApiClient.getCalibratedCalendar()
             val timeFmt = SimpleDateFormat("hh:mm:ss a", Locale.US).apply {
@@ -517,23 +562,157 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             return
         }
 
-        hideNoContent()
-
         if (currentIndex >= playlist.size) currentIndex = 0
         val item = playlist[currentIndex]
         val url = item.url ?: return playNext()
 
         currentMedia = item
+        val mediaType = getMediaType(item)
+
+        // For video & image: verify local zero-buffering cache
+        if (mediaType == "video" || mediaType == "image") {
+            if (MediaCacheManager.isCached(this, item)) {
+                // INSTANT ZERO-BUFFERING LOCAL PLAYBACK
+                val cachedFile = MediaCacheManager.getCachedFile(this, item)
+                hideDownloadProgress()
+                hideNoContent()
+                startCachedPlayback(item, cachedFile, mediaType)
+                return
+            }
+
+            // Not yet in cache:
+            Log.d(TAG, "Media not yet cached: ${item.contentName ?: item.filename}")
+
+            // If no video is currently playing or we are on the waiting/idle screen:
+            val isIdle = player?.isPlaying != true || infoContainer.visibility == View.VISIBLE
+
+            if (isIdle) {
+                showDownloadProgress(item)
+                lifecycleScope.launch {
+                    val file = MediaCacheManager.downloadMedia(this@PlayerActivity, item) { bytesRead, totalBytes, pct ->
+                        runOnUiThread {
+                            if (currentMedia?.mediaId == item.mediaId) {
+                                updateDownloadProgress(bytesRead, totalBytes, pct)
+                            }
+                        }
+                    }
+                    if (file != null && currentMedia?.mediaId == item.mediaId) {
+                        runOnUiThread {
+                            hideDownloadProgress()
+                            hideNoContent()
+                            startCachedPlayback(item, file, mediaType)
+                        }
+                    } else if (file == null && currentMedia?.mediaId == item.mediaId) {
+                        // Fallback to streaming if network failed to cache
+                        runOnUiThread {
+                            hideDownloadProgress()
+                            hideNoContent()
+                            startStreamingPlayback(item, url, mediaType)
+                        }
+                    }
+                }
+                return
+            } else {
+                // Content currently playing: allow current video to finish while downloading new one in background
+                lifecycleScope.launch {
+                    MediaCacheManager.downloadMedia(this@PlayerActivity, item)
+                }
+                // Fallback to streaming if this item's turn started immediately
+                hideDownloadProgress()
+                hideNoContent()
+                startStreamingPlayback(item, url, mediaType)
+                return
+            }
+        }
+
+        // Text / document playback
+        hideDownloadProgress()
+        hideNoContent()
+        showScheduleInfo(item)
+        reportPlayback(item.mediaId, "started")
+        playTextMedia(item)
+    }
+
+    private fun startCachedPlayback(item: ScheduleItem, file: File, mediaType: String) {
         showScheduleInfo(item)
         reportPlayback(item.mediaId, "started")
 
-        val mediaType = getMediaType(item)
-        when (mediaType) {
-            "video" -> playVideo(url)
-            "image" -> playImage(url)
-            "text", "pdf", "docx" -> playTextMedia(item)
-            else -> playImage(url)
+        if (mediaType == "video") {
+            hideTextContainer()
+            loadingSpinner.visibility = View.GONE
+            imageView.animate().alpha(0f).setDuration(CROSSFADE_DURATION_MS).start()
+            playerView.animate().alpha(1f).setDuration(CROSSFADE_DURATION_MS).start()
+            imageRunnable?.let { handler.removeCallbacks(it) }
+
+            val fileUri = Uri.fromFile(file)
+            Log.d(TAG, "Playing cached zero-buffering video: $fileUri")
+            player?.setMediaItem(MediaItem.fromUri(fileUri))
+            player?.prepare()
+            player?.playWhenReady = true
+        } else {
+            // Image
+            hideTextContainer()
+            loadingSpinner.visibility = View.GONE
+            playerView.animate().alpha(0f).setDuration(CROSSFADE_DURATION_MS).start()
+            player?.pause()
+
+            Glide.with(this)
+                .load(file)
+                .fitCenter()
+                .into(imageView)
+
+            imageView.animate().alpha(1f).setDuration(CROSSFADE_DURATION_MS).start()
+
+            imageRunnable?.let { handler.removeCallbacks(it) }
+            imageRunnable = Runnable { playNext() }
+            handler.postDelayed(imageRunnable!!, IMAGE_DURATION_MS)
         }
+    }
+
+    private fun startStreamingPlayback(item: ScheduleItem, url: String, mediaType: String) {
+        showScheduleInfo(item)
+        reportPlayback(item.mediaId, "started")
+
+        if (mediaType == "video") {
+            playVideo(url)
+        } else {
+            playImage(url)
+        }
+    }
+
+    private fun showDownloadProgress(item: ScheduleItem) {
+        val name = item.contentName ?: item.filename ?: "Content"
+        textDownloadTitle.text = "Caching $name..."
+        textDownloadPercent.text = "0%"
+        downloadProgressBar.progress = 0
+        textDownloadStats.text = "Connecting..."
+        downloadProgressContainer.visibility = View.VISIBLE
+
+        infoTitle.text = "Caching Media"
+        infoSubtitle.text = "Downloading high-definition content for zero-buffering playback..."
+        infoContainer.visibility = View.VISIBLE
+        infoContainer.alpha = 1f
+    }
+
+    private fun updateDownloadProgress(bytesRead: Long, totalBytes: Long, pct: Int) {
+        val safePct = pct.coerceIn(0, 100)
+        downloadProgressBar.progress = safePct
+        textDownloadPercent.text = "$safePct%"
+        if (totalBytes > 0L) {
+            textDownloadStats.text = "${formatMb(bytesRead)} / ${formatMb(totalBytes)}"
+        } else {
+            textDownloadStats.text = "${formatMb(bytesRead)} downloaded"
+        }
+    }
+
+    private fun hideDownloadProgress() {
+        downloadProgressContainer.visibility = View.GONE
+    }
+
+    private fun formatMb(bytes: Long): String {
+        if (bytes <= 0L) return "0 MB"
+        val mb = bytes.toDouble() / (1024.0 * 1024.0)
+        return String.format(Locale.US, "%.1f MB", mb)
     }
 
     private fun playVideo(url: String) {
@@ -775,6 +954,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         imageView.animate().alpha(0f).setDuration(CROSSFADE_DURATION_MS).start()
         hideTextContainer()
         hideScheduleInfo()
+        hideDownloadProgress()
         currentMedia = null
     }
 
@@ -788,6 +968,7 @@ class PlayerActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun hideNoContent() {
+        hideDownloadProgress()
         if (infoContainer.visibility == View.VISIBLE) {
             infoContainer.animate()
                 .alpha(0f)

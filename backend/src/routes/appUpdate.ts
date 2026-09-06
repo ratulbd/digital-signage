@@ -8,10 +8,10 @@ const router = Router()
 
 // Default fallback configuration if server.json is not present
 const DEFAULT_CONFIG = {
-  versionCode: 3,
-  versionName: '1.2',
+  versionCode: 4,
+  versionName: '1.3',
   apkUrl: 'https://tv.sbmoffice.net/MPL-Dash-TV.apk',
-  releaseNotes: 'Calibrated server clock synchronization, live BST clock overlay, and instant schedule matching.'
+  releaseNotes: 'Zero-buffering local media cache, aggressive TV disk storage management, and precise schedule transitions.'
 }
 
 function loadServerConfig() {

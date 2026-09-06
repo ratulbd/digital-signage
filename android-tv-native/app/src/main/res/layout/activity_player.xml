@@ -74,11 +74,85 @@
             android:layout_marginTop="12dp"
             android:fontFamily="sans-serif"
             android:gravity="center"
-            android:maxWidth="320dp"
+            android:maxWidth="360dp"
             android:lineSpacingMultiplier="1.4"
             android:text="Create a schedule in the CMS dashboard to start playback"
             android:textColor="#808080"
             android:textSize="14sp" />
+
+        <!-- Download progress card -->
+        <LinearLayout
+            android:id="@+id/downloadProgressContainer"
+            android:layout_width="380dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:background="@drawable/bg_glass_pill"
+            android:orientation="vertical"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="18dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/textDownloadTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1"
+                    android:text="Caching content..."
+                    android:textColor="#ffffff"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/textDownloadPercent"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="0%"
+                    android:textColor="#38bdf8"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/downloadProgressBar"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:layout_marginTop="12dp"
+                android:max="100"
+                android:progress="0"
+                android:progressBackgroundTint="#33ffffff"
+                android:progressTint="#38bdf8" />
+
+            <TextView
+                android:id="@+id/textDownloadStats"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:fontFamily="sans-serif"
+                android:text="0 MB / 0 MB"
+                android:textColor="#808080"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/infoAppVersion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:fontFamily="sans-serif"
+            android:text="MPL-Dash-TV v1.3"
+            android:textColor="#40ffffff"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Top-right device info pill (matches browser #device-info) -->
@@ -129,6 +203,21 @@
             android:text="--:--:--"
             android:textColor="#38bdf8"
             android:textSize="13sp" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="12dp"
+            android:layout_marginHorizontal="10dp"
+            android:background="#40ffffff" />
+
+        <TextView
+            android:id="@+id/textAppVersion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif"
+            android:text="v1.3"
+            android:textColor="#80ffffff"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Bottom-left schedule info pill (matches browser #schedule-info) -->

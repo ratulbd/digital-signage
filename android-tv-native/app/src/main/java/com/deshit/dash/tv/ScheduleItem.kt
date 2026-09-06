@@ -13,7 +13,8 @@ data class ScheduleItem(
     val startDate: String?,
     val endDate: String?,
     val startTime: String?,
-    val endTime: String?
+    val endTime: String?,
+    val size: Long? = null
 )
 
 data class PairingResponse(
