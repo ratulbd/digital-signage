@@ -1,0 +1,210 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x", "debian-openssl-1.0.x", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Hierarchy: Company → Circle → Subcenter ────────────────────────────────
+
+model Company {
+  id                String             @id @default(uuid())
+  name              String             @unique
+  circles           Circle[]
+  users             User[]
+  media             Media[]
+  schedules         ScheduleItem[]
+  mediaCategories   MediaCategory[]
+  mediaContentTypes MediaContentType[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model Circle {
+  id         String         @id @default(uuid())
+  name       String
+  companyId  String
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  subcenters Subcenter[]
+  users      User[]
+  media      Media[]
+  schedules  ScheduleItem[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+model Subcenter {
+  id        String   @id @default(uuid())
+  name      String
+  circleId  String?
+  circle    Circle?  @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  users     User[]
+  devices   Device[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  name         String?
+  passwordHash String
+  // CENTRAL_ADMIN | COMPANY_ADMIN | CIRCLE_ADMIN | SUBCENTER_ADMIN
+  role         String         @default("SUBCENTER_ADMIN")
+  companyId    String?
+  company      Company?       @relation(fields: [companyId], references: [id])
+  circleId     String?
+  circle       Circle?        @relation(fields: [circleId], references: [id])
+  subcenterId  String?
+  subcenter    Subcenter?     @relation(fields: [subcenterId], references: [id])
+  emailVerified      Boolean        @default(false)
+  verificationCode   String?
+  mustChangePassword Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  media        Media[]
+  schedules    ScheduleItem[]
+}
+
+// ─── Devices ─────────────────────────────────────────────────────────────────
+
+model Device {
+  id            String           @id @default(uuid())
+  name          String
+  subcenterId   String
+  subcenter     Subcenter        @relation(fields: [subcenterId], references: [id], onDelete: Cascade)
+  lastHeartbeat DateTime         @default(now())
+  isOnline      Boolean          @default(false)
+  socketId      String?
+  pairedAt      DateTime?        // Set when TV first authenticates with its device token
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  scheduleItems ScheduleItem[]   @relation("DeviceSchedules")
+  playbackLogs  PlaybackLog[]
+  heartbeats    DeviceHeartbeat[]
+}
+
+// ─── Media ───────────────────────────────────────────────────────────────────
+
+model Media {
+  id            String         @id @default(uuid())
+  filename      String
+  url           String
+  tvFilename    String?        // TV-optimized video filename (720p H.264)
+  tvUrl         String?        // TV-optimized video URL
+  type          String         @default("IMAGE")
+  size          Int
+  uploadedBy    String
+  uploader      User           @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  // Visibility: who published it as public (COMPANY | CIRCLE | SUBCENTER)
+  isPublic      Boolean        @default(false)
+  publishedBy   String         @default("SUBCENTER") // scope level that published
+  // Owner hierarchy for scoping
+  companyId     String?
+  company       Company?       @relation(fields: [companyId], references: [id])
+  circleId      String?
+  circle        Circle?        @relation(fields: [circleId], references: [id])
+  // Content classification
+  categoryId    String?
+  category      MediaCategory?    @relation(fields: [categoryId], references: [id])
+  contentTypeId String?
+  contentType   MediaContentType? @relation(fields: [contentTypeId], references: [id])
+  contentName   String?
+  narrative         String?
+  generatedImageUrl String?
+  generatedImages   String?      // JSON array of { url, sectionPrompt }
+  keyPoints         String?      // JSON array string
+  createdAt         DateTime     @default(now())
+  schedules     ScheduleItem[]
+  playbackLogs  PlaybackLog[]
+}
+
+model MediaCategory {
+  id        String           @id @default(uuid())
+  name      String
+  companyId String?          // null = global default
+  company   Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  types     MediaContentType[]
+  media     Media[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([name, companyId])
+}
+
+model MediaContentType {
+  id         String        @id @default(uuid())
+  name       String
+  categoryId String
+  category   MediaCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  companyId  String?
+  company    Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  media      Media[]
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([name, categoryId])
+}
+
+// ─── Schedules ───────────────────────────────────────────────────────────────
+
+model ScheduleItem {
+  id          String   @id @default(uuid())
+  mediaId     String
+  media       Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  // TIER_1 = Company, TIER_2 = Circle, TIER_3 = Subcenter
+  tier        String   @default("TIER_3")
+  deviceIds   Device[] @relation("DeviceSchedules")
+  startDate   DateTime?
+  endDate     DateTime?
+  startTime   String?  // "HH:mm"
+  endTime     String?  // "HH:mm"
+  isRecurring Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdBy   String
+  creator     User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  // Scope hierarchy
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
+  circleId    String?
+  circle      Circle?  @relation(fields: [circleId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Logs ────────────────────────────────────────────────────────────────────
+
+model PlaybackLog {
+  id        String    @id @default(uuid())
+  deviceId  String
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  mediaId   String
+  media     Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  tier      String    @default("TIER_3")
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  completed Boolean   @default(false)
+}
+
+model DeviceHeartbeat {
+  id        String   @id @default(uuid())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  timestamp DateTime @default(now())
+  isOnline  Boolean  @default(true)
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  target    String
+  changes   Json?
+  ipAddress String?
+  timestamp DateTime @default(now())
+}

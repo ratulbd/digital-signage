@@ -1,0 +1,780 @@
+@import "tailwindcss";
+
+/* ========================================
+   Desh-IT Dash — Clean Professional Design System
+   ======================================== */
+
+:root {
+  /* Light Foundation */
+  --void:        #f6f7f9;
+  --abyss:       #ffffff;
+  --plate:       #f3f4f6;
+  --plate-hover: #e5e7eb;
+  --edge:        #e5e7eb;
+  --edge-bright: #d1d5db;
+
+  /* Primary Colors — Soft Indigo */
+  --cyan:        #4f46e5;
+  --cyan-dim:    rgba(79, 70, 229, 0.08);
+  --cyan-glow:   rgba(79, 70, 229, 0.06);
+  --amber:       #f59e0b;
+  --amber-dim:   rgba(245, 158, 11, 0.08);
+  --amber-glow:  rgba(245, 158, 11, 0.06);
+  --signal:      #10b981;
+  --signal-dim:  rgba(16, 185, 129, 0.08);
+  --alert:       #ef4444;
+  --alert-dim:   rgba(239, 68, 68, 0.08);
+  --alert-glow:  rgba(239, 68, 68, 0.06);
+
+  /* Text */
+  --text-prime:  #1f2937;
+  --text-dim:    #6b7280;
+  --text-ghost:  #9ca3af;
+
+  /* Typography */
+  --font-ui:     'Space Grotesk', sans-serif;
+  --font-data:   'JetBrains Mono', monospace;
+
+  /* Spacing */
+  --space-xs:    4px;
+  --space-sm:    8px;
+  --space-md:    16px;
+  --space-lg:    24px;
+  --space-xl:    32px;
+
+  /* Radii */
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+
+  /* Motion */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-expo:   cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast:   150ms;
+  --duration-normal: 200ms;
+  --duration-slow:   350ms;
+}
+
+@theme {
+  --color-void:        var(--void);
+  --color-abyss:       var(--abyss);
+  --color-plate:       var(--plate);
+  --color-edge:        var(--edge);
+  --color-cyan:        var(--cyan);
+  --color-amber:       var(--amber);
+  --color-signal:      var(--signal);
+  --color-alert:       var(--alert);
+  --color-text-prime:  var(--text-prime);
+  --color-text-dim:    var(--text-dim);
+  --color-text-ghost:  var(--text-ghost);
+  --font-ui:           var(--font-ui);
+  --font-data:         var(--font-data);
+  --color-primary:     var(--cyan);
+  --color-secondary:   var(--amber);
+}
+
+/* ========================================
+   BASE
+   ======================================== */
+
+html, body {
+  background-color: var(--void);
+  color: var(--text-prime);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--edge) transparent;
+}
+
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ========================================
+   CUSTOM SCROLLBAR
+   ======================================== */
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--edge-bright);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--text-ghost);
+}
+
+.custom-scrollbar-visible {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+}
+.custom-scrollbar-visible::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar-visible::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+}
+.custom-scrollbar-visible::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 4px;
+}
+.custom-scrollbar-visible::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+/* ========================================
+   AETHER CARD — Soft Elevation
+   ======================================== */
+
+.aether-card {
+  background: var(--abyss);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--duration-normal) var(--ease-spring);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+.aether-card:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 12px 28px rgba(79, 70, 229, 0.05), 0 4px 12px rgba(0, 0, 0, 0.02);
+  transform: translateY(-3px) scale(1.005);
+}
+
+.aether-card-compact {
+  composes: aether-card;
+  padding: var(--space-md);
+}
+
+/* ========================================
+   AETHER BUTTON — Clean & Soft
+   ======================================== */
+
+.aether-btn, .aether-btn-amber, .aether-btn-ghost {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: 10px 20px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  overflow: hidden;
+  transition: all var(--duration-fast) var(--ease-spring);
+  white-space: nowrap;
+}
+
+.aether-btn {
+  color: #ffffff;
+  background: var(--cyan);
+}
+.aether-btn:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
+}
+.aether-btn:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.15);
+}
+.aether-btn:disabled, .aether-btn-amber:disabled, .aether-btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Amber variant */
+.aether-btn-amber {
+  color: #ffffff;
+  background: var(--amber);
+}
+.aether-btn-amber:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.25);
+}
+.aether-btn-amber:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.15);
+}
+
+/* Alert variant */
+.aether-btn-alert {
+  color: #ffffff;
+  background: var(--alert);
+}
+.aether-btn-alert:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.25);
+}
+.aether-btn-alert:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.15);
+}
+
+/* Ghost variant */
+.aether-btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+.aether-btn-ghost:hover {
+  color: var(--text-prime);
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px var(--edge-bright), 0 4px 12px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1.5px) scale(1.02);
+}
+.aether-btn-ghost:active {
+  transform: translateY(0.5px) scale(0.98);
+}
+
+/* Icon-only variant */
+.aether-btn-icon {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: var(--abyss);
+  color: var(--text-dim);
+  box-shadow: inset 0 0 0 1px var(--edge);
+  font-size: 16px;
+  transition: all var(--duration-fast) var(--ease-spring);
+}
+.aether-btn-icon:hover {
+  color: var(--cyan);
+  box-shadow: inset 0 0 0 1px var(--cyan), 0 4px 12px rgba(79, 70, 229, 0.1);
+  transform: scale(1.08);
+}
+.aether-btn-icon:active {
+  transform: scale(0.93);
+}
+.aether-btn-icon.alert:hover {
+  color: var(--alert);
+  box-shadow: inset 0 0 0 1px var(--alert), 0 4px 12px rgba(239, 68, 68, 0.1);
+}
+
+/* ========================================
+   AETHER FORM ELEMENTS
+   ======================================== */
+
+.aether-label {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  margin-bottom: var(--space-sm);
+}
+
+.aether-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--text-prime);
+  background: var(--abyss);
+  border: 1px solid var(--edge-bright);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: all var(--duration-fast) var(--ease-smooth);
+}
+.aether-input::placeholder {
+  color: var(--text-ghost);
+}
+.aether-input:hover {
+  border-color: var(--text-ghost);
+}
+.aether-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--cyan-dim);
+}
+.aether-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: var(--plate);
+}
+
+.aether-select {
+  width: 100%;
+  padding: 12px 44px 12px 16px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--text-prime);
+  background-color: var(--abyss);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  border: 1px solid var(--edge-bright);
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-smooth);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.aether-select:hover {
+  background-color: var(--plate);
+  border-color: var(--text-ghost);
+}
+.aether-select:focus {
+  border-color: var(--cyan);
+  background-color: var(--abyss);
+  box-shadow: 0 0 0 3px var(--cyan-dim);
+}
+.aether-select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background-color: var(--plate);
+}
+
+/* Checkbox */
+.aether-checkbox {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: var(--abyss);
+  cursor: pointer;
+  position: relative;
+  transition: all var(--duration-fast) var(--ease-smooth);
+}
+.aether-checkbox:checked {
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+.aether-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ========================================
+   AETHER TABLE
+   ======================================== */
+
+.aether-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.aether-table thead th {
+  text-align: left;
+  padding: 12px 20px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--edge);
+  white-space: nowrap;
+}
+.aether-table tbody td {
+  padding: 14px 20px;
+  font-size: 14px;
+  color: var(--text-prime);
+  border-bottom: 1px solid var(--edge);
+  transition: background var(--duration-fast) var(--ease-smooth);
+}
+.aether-table tbody tr {
+  transition: background var(--duration-fast) var(--ease-smooth);
+}
+.aether-table tbody tr:hover td {
+  background: rgba(79, 70, 229, 0.02);
+}
+
+/* ========================================
+   AETHER BADGE
+   ======================================== */
+
+.aether-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.aether-badge-cyan {
+  background: rgba(79, 70, 229, 0.06);
+  color: var(--cyan);
+}
+.aether-badge-amber {
+  background: rgba(245, 158, 11, 0.06);
+  color: var(--amber);
+}
+.aether-badge-signal {
+  background: rgba(16, 185, 129, 0.06);
+  color: var(--signal);
+}
+.aether-badge-alert {
+  background: rgba(239, 68, 68, 0.06);
+  color: var(--alert);
+}
+.aether-badge-ghost {
+  background: var(--plate);
+  color: var(--text-dim);
+}
+
+/* ========================================
+   AETHER NAV — Sidebar navigation
+   ======================================== */
+
+.aether-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--ease-smooth);
+  position: relative;
+}
+.aether-nav::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 16px;
+  background: var(--cyan);
+  border-radius: 0 3px 3px 0;
+  transition: transform var(--duration-fast) var(--ease-smooth);
+}
+.aether-nav:hover {
+  color: var(--text-prime);
+  background: var(--plate);
+}
+.aether-nav:active {
+  background: var(--plate-hover);
+  transform: scale(0.99);
+}
+.aether-nav-active {
+  color: var(--cyan);
+  background: rgba(79, 70, 229, 0.06);
+  font-weight: 600;
+}
+.aether-nav-active::before {
+  transform: translateY(-50%) scaleY(1);
+}
+.aether-nav-active:hover {
+  background: rgba(79, 70, 229, 0.1);
+}
+
+/* ========================================
+   AETHER HEADER — Page headers
+   ======================================== */
+
+.aether-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+.aether-header-title {
+  font-family: var(--font-ui);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-prime);
+  line-height: 1.15;
+}
+.aether-header-sub {
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-top: var(--space-sm);
+}
+
+/* ========================================
+   AETHER STAT — Metric display
+   ======================================== */
+
+.aether-stat {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+.aether-stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-prime);
+  line-height: 1;
+}
+.aether-stat-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  margin-top: var(--space-sm);
+}
+
+/* ========================================
+   AETHER DIVIDER
+   ======================================== */
+
+.aether-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--edge), transparent);
+  border: none;
+}
+
+/* ========================================
+   AETHER EMPTY STATE
+   ======================================== */
+
+.aether-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 24px;
+  gap: var(--space-md);
+}
+.aether-empty-text {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+/* ========================================
+   DECODE-IN Animation — Soft & Subtle
+   ======================================== */
+
+@keyframes decodeIn {
+  0% {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+.decode-in {
+  animation: decodeIn 0.45s var(--ease-expo) forwards;
+}
+.decode-in-delay-1 { animation-delay: 0.06s; opacity: 0; }
+.decode-in-delay-2 { animation-delay: 0.12s; opacity: 0; }
+.decode-in-delay-3 { animation-delay: 0.18s; opacity: 0; }
+.decode-in-delay-4 { animation-delay: 0.24s; opacity: 0; }
+.decode-in-delay-5 { animation-delay: 0.30s; opacity: 0; }
+
+/* ========================================
+   SKELETON Loading
+   ======================================== */
+
+@keyframes skeletonShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--plate) 25%, var(--edge) 50%, var(--plate) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ========================================
+   SPINNER
+   ======================================== */
+
+.aether-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--edge);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ========================================
+   TAB SWITCHER
+   ======================================== */
+
+.aether-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--plate);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+.aether-tab {
+  padding: 8px 20px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  border-radius: var(--space-xs);
+  transition: all var(--duration-fast) var(--ease-smooth);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+.aether-tab:hover {
+  color: var(--text-prime);
+}
+.aether-tab-active {
+  background: var(--abyss);
+  color: var(--cyan);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* ========================================
+   FORM SECTION HEADER
+   ======================================== */
+
+.aether-form-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-md);
+  margin-bottom: var(--space-md);
+  border-bottom: 1px solid var(--edge);
+}
+.aether-form-header-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(79, 70, 229, 0.06);
+  border-radius: var(--radius-sm);
+  color: var(--cyan);
+}
+
+/* ========================================
+   ERROR BANNER
+   ======================================== */
+
+.aether-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px solid rgba(239, 68, 68, 0.1);
+  border-radius: var(--radius-sm);
+  color: var(--alert);
+  font-size: 13px;
+}
+
+/* ========================================
+   STATUS DOT
+   ======================================== */
+
+.aether-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  position: relative;
+}
+.aether-status-online {
+  background: var(--signal);
+}
+.aether-status-offline {
+  background: var(--text-ghost);
+}
+
+/* ========================================
+   AVATAR / INITIAL BADGE
+   ======================================== */
+
+.aether-avatar {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-data);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cyan);
+  background: rgba(79, 70, 229, 0.06);
+  border: 1px solid rgba(79, 70, 229, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+/* ========================================
+   MODAL OVERLAY
+   ======================================== */
+
+.aether-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(31, 41, 55, 0.45);
+  backdrop-filter: blur(12px);
+}
+
+/* ========================================
+   Focus accessibility
+   ======================================== */
+
+*:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* ========================================
+   Reduced motion
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

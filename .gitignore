@@ -1,0 +1,52 @@
+# Node.js
+node_modules/
+*/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+web-cms/dist/
+backend/dist/
+dist/
+
+# Uploaded media & storage
+backend/uploads/*
+!backend/uploads/.gitkeep
+uploads/
+tempmediaStorage/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Android Native
+android-tv-native/.gradle/
+android-tv-native/build/
+android-tv-native/*/build/
+android-tv-native/local.properties
+android-tv-native/.idea/
+android-tv-native/*.iml
+
+# Screen recordings & large media files
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.apk
+
+# Scratch and temporary scripts
+scratch/
+test_stitch.py
+
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.gemini/

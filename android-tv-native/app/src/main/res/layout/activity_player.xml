@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0a0a0b">
+
+    <!-- Media containers with crossfade support -->
+    <FrameLayout
+        android:id="@+id/mediaContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/playerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:alpha="0"
+            android:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/imageView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:alpha="0"
+            android:scaleType="fitCenter"
+            android:visibility="visible" />
+    </FrameLayout>
+
+    <!-- Loading spinner -->
+    <ProgressBar
+        android:id="@+id/loadingSpinner"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:indeterminateTint="#8b5cf6"
+        android:visibility="gone" />
+
+    <!-- Centered "No Content" state -->
+    <LinearLayout
+        android:id="@+id/infoContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="40dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_marginBottom="24dp"
+            android:alpha="0.5"
+            android:src="@drawable/ic_tv_off"
+            app:tint="#666666" />
+
+        <TextView
+            android:id="@+id/infoTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:text="Waiting for Content"
+            android:textColor="#e6e6e6"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/infoSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:fontFamily="sans-serif"
+            android:gravity="center"
+            android:maxWidth="320dp"
+            android:lineSpacingMultiplier="1.4"
+            android:text="Create a schedule in the CMS dashboard to start playback"
+            android:textColor="#808080"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- Top-right device info pill (matches browser #device-info) -->
+    <LinearLayout
+        android:id="@+id/deviceInfoPill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="20dp"
+        android:layout_marginEnd="20dp"
+        android:background="@drawable/bg_glass_pill"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="8dp"
+            android:src="@android:drawable/ic_menu_mylocation"
+            app:tint="#e6e6e6" />
+
+        <TextView
+            android:id="@+id/textSubcenter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxWidth="200dp"
+            android:maxLines="1"
+            android:text="—"
+            android:textColor="#ffffff"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- Bottom-left schedule info pill (matches browser #schedule-info) -->
+    <LinearLayout
+        android:id="@+id/scheduleInfoPill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="20dp"
+        android:layout_marginBottom="20dp"
+        android:background="@drawable/bg_glass_pill"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp"
+        android:paddingVertical="14dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/textMeta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif"
+            android:maxWidth="320dp"
+            android:maxLines="1"
+            android:text="Digital Signage System"
+            android:textColor="#808080"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/textTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxWidth="320dp"
+            android:maxLines="1"
+            android:text="Loading..."
+            android:textColor="#ffffff"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Text / Narrative container (monolith stage) -->
+    <FrameLayout
+        android:id="@+id/textContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#0f0d0b"
+        android:visibility="gone">
+
+        <!-- Loading state for narrative -->
+        <LinearLayout
+            android:id="@+id/narrativeLoader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="40dp"
+            android:visibility="visible">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:text="📖"
+                android:textSize="48sp" />
+
+            <TextView
+                android:id="@+id/loaderTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:text="Curating narrative"
+                android:textColor="#e8dcc8"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/loaderSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:fontFamily="sans-serif"
+                android:gravity="center"
+                android:maxWidth="400dp"
+                android:lineSpacingMultiplier="1.4"
+                android:text="Polishing the text and preparing a professional audiobook script..."
+                android:textColor="#80E8DCC8"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Monolith text stage -->
+        <LinearLayout
+            android:id="@+id/monolithStage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="48dp"
+            android:visibility="gone">
+
+            <!-- Ghost previous sentence -->
+            <TextView
+                android:id="@+id/ghostPrev"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:alpha="0.18"
+                android:ellipsize="end"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:maxLines="2"
+                android:text=""
+                android:textColor="#e8dcc8"
+                android:textSize="18sp" />
+
+            <!-- Active sentence -->
+            <TextView
+                android:id="@+id/activeSentence"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:maxLines="3"
+                android:shadowColor="#80FFD700"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="16"
+                android:text=""
+                android:textColor="#ffd770"
+                android:textSize="32sp"
+                android:textStyle="bold" />
+
+            <!-- Ghost next sentence -->
+            <TextView
+                android:id="@+id/ghostNext"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:alpha="0.12"
+                android:ellipsize="end"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:maxLines="2"
+                android:text=""
+                android:textColor="#e8dcc8"
+                android:textSize="18sp" />
+        </LinearLayout>
+
+        <!-- Reading progress bar -->
+        <View
+            android:id="@+id/readingProgressBar"
+            android:layout_width="180dp"
+            android:layout_height="3dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="40dp"
+            android:background="#14D4AF37"
+            android:visibility="gone">
+        </View>
+
+        <View
+            android:id="@+id/readingProgressFill"
+            android:layout_width="0dp"
+            android:layout_height="3dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="40dp"
+            android:background="#D4AF37"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <!-- Tap overlay to detect user interaction -->
+    <View
+        android:id="@+id/tapOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#00000000"
+        android:clickable="true"
+        android:focusable="false" />
+
+</FrameLayout>

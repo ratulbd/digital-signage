@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet" />
+    
+    <!-- AETHER Typography: Space Grotesk (UI) + JetBrains Mono (Data) -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <title>Metal Innovation — Digital Signage</title>
+    
+    <script>
+      (function() {
+        'use strict';
+        function markFontLoaded() {
+          document.documentElement.classList.add('material-symbols-loaded');
+        }
+        if (document.fonts && document.fonts.load) {
+          document.fonts.load('12px "Material Symbols Outlined"')
+            .then(markFontLoaded)
+            .catch(function() { markFontLoaded(); });
+          setTimeout(markFontLoaded, 2000);
+        } else {
+          if (document.readyState === 'complete') {
+            setTimeout(markFontLoaded, 100);
+          } else {
+            window.addEventListener('load', function() {
+              setTimeout(markFontLoaded, 100);
+            });
+          }
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

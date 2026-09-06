@@ -1,0 +1,14 @@
+{
+  "name": "android-tv-player",
+  "version": "1.0.0",
+  "description": "Web-based TV player for Cloud-Hosted Enterprise Digital Signage System",
+  "scripts": {
+    "dev": "npx serve public"
+  },
+  "keywords": [
+    "digital-signage",
+    "tv-player",
+    "kiosk"
+  ],
+  "license": "MIT"
+}
