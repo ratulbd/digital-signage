@@ -524,25 +524,36 @@ router.post('/categories', authMiddleware, requireCompanyAdmin, async (req: Auth
 })
 
 // DELETE /categories/:id — delete if no media
-router.delete('/categories/:id', authMiddleware, requireCompanyAdmin, async (req: AuthRequest, res) => {
+const handleCategoryDelete = async (req: AuthRequest, res: any) => {
   try {
     const id = req.params.id as string
     const category = await prisma.mediaCategory.findUnique({
       where: { id },
-      include: { _count: { select: { media: true } } },
+      include: {
+        _count: { select: { media: true } },
+        types: {
+          include: { _count: { select: { media: true } } },
+        },
+      },
     })
     if (!category) return res.status(404).json({ error: 'Category not found' })
 
-    if (category._count.media > 0) {
+    const typeMediaCount = category.types.reduce((acc, t) => acc + (t._count?.media || 0), 0)
+    if (category._count.media > 0 || typeMediaCount > 0) {
       return res.status(409).json({ error: 'Cannot delete category with existing media' })
     }
 
+    // Delete child types first to maintain clean referential integrity
+    await prisma.mediaContentType.deleteMany({ where: { categoryId: id } })
     await prisma.mediaCategory.delete({ where: { id } })
     res.json({ message: 'Category deleted' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
-})
+}
+
+router.delete('/categories/:id', authMiddleware, requireCompanyAdmin, handleCategoryDelete)
+router.post('/categories/:id/delete', authMiddleware, requireCompanyAdmin, handleCategoryDelete)
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -588,7 +599,7 @@ router.post('/types', authMiddleware, requireCompanyAdmin, async (req: AuthReque
 })
 
 // DELETE /types/:id — delete if no media
-router.delete('/types/:id', authMiddleware, requireCompanyAdmin, async (req: AuthRequest, res) => {
+const handleTypeDelete = async (req: AuthRequest, res: any) => {
   try {
     const id = req.params.id as string
     const type = await prisma.mediaContentType.findUnique({
@@ -606,7 +617,10 @@ router.delete('/types/:id', authMiddleware, requireCompanyAdmin, async (req: Aut
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
-})
+}
+
+router.delete('/types/:id', authMiddleware, requireCompanyAdmin, handleTypeDelete)
+router.post('/types/:id/delete', authMiddleware, requireCompanyAdmin, handleTypeDelete)
 
 // ── GET single media ──────────────────────────────────────────────────────────
 router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {

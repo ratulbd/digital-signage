@@ -257,7 +257,9 @@ export default function MediaPage() {
     }
     if (!confirm(`Delete category "${cat.name}"?`)) return;
     try {
-      await api.delete(`/media/categories/${id}`);
+      await api.post(`/media/categories/${id}/delete`).catch(async () => {
+        await api.delete(`/media/categories/${id}`);
+      });
       fetchCategories();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to delete category');
@@ -286,7 +288,9 @@ export default function MediaPage() {
     }
     if (!confirm(`Delete type "${type.name}"?`)) return;
     try {
-      await api.delete(`/media/types/${type.id}`);
+      await api.post(`/media/types/${type.id}/delete`).catch(async () => {
+        await api.delete(`/media/types/${type.id}`);
+      });
       fetchCategories();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to delete type');

@@ -90,16 +90,22 @@ async function main() {
       await client.uploadFromDir(path.join(rootDir, 'backend', 'dist'));
       console.log('✅ Backend code updated! (https://api.sbmoffice.net)');
 
-      // Restart Passenger Node.js app via tmp/restart.txt
+      // Seamlessly restart backend Node.js process
       try {
-        await client.cd('/');
-        await client.ensureDir('backend/tmp');
         const stream = require('stream');
-        const readable = stream.Readable.from(Buffer.from(Date.now().toString()));
-        await client.uploadFrom(readable, 'restart.txt');
-        console.log('🔄 Passenger Node.js application restarted!');
+        const restartPhp = `<?php
+shell_exec("pkill -9 -f 'node dist/index.js'");
+usleep(500000);
+shell_exec("nohup /bin/bash /home/sbmoffic/backend/run.sh > /dev/null 2>&1 &");
+echo "RESTARTED";
+?>`;
+        await client.uploadFrom(stream.Readable.from(Buffer.from(restartPhp)), '/public_html/tv/runner.php');
+        const res = await fetch('https://tv.sbmoffice.net/runner.php');
+        const text = await res.text();
+        console.log(`🔄 Backend Node.js process restarted: ${text.trim()}`);
+        await client.remove('/public_html/tv/runner.php');
       } catch (e) {
-        console.log('ℹ️ Note: tmp/restart.txt touch skipped:', e.message);
+        console.log('ℹ️ Note: automated process restart:', e.message);
       }
     }
 
