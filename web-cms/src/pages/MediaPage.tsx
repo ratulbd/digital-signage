@@ -55,6 +55,13 @@ const detectFileTypeLabel = (file: File) => {
   return 'UNKNOWN';
 };
 
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return '0 B';
+  const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
 export default function MediaPage() {
   const { user } = useAuth();
   const canPublish = user?.role === 'CENTRAL_ADMIN' || user?.role === 'COMPANY_ADMIN' || user?.role === 'CIRCLE_ADMIN';
@@ -80,6 +87,25 @@ export default function MediaPage() {
   const [uploadContentName, setUploadContentName] = useState('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [uploadState, setUploadState] = useState<{
+    progress: number;
+    loaded: number;
+    total: number;
+    speed: string;
+    eta: string;
+    stage: 'idle' | 'uploading' | 'processing' | 'success' | 'error';
+  }>({
+    progress: 0,
+    loaded: 0,
+    total: 0,
+    speed: '',
+    eta: '',
+    stage: 'idle',
+  });
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const lastLoadedRef = useRef<number>(0);
+  const lastTimeRef = useRef<number>(0);
 
   // ── Category management modal ──
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -172,7 +198,24 @@ export default function MediaPage() {
     if (!uploadCategoryId) { setError('Please select a category'); return; }
     if (!uploadTypeId) { setError('Please select a type'); return; }
 
-    setUploading(true); setError('');
+    setUploading(true);
+    setError('');
+    const totalBytes = uploadFile.size || 1;
+    setUploadState({
+      progress: 0,
+      loaded: 0,
+      total: totalBytes,
+      speed: 'Starting...',
+      eta: 'Estimating...',
+      stage: 'uploading',
+    });
+
+    lastLoadedRef.current = 0;
+    lastTimeRef.current = performance.now();
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     const formData = new FormData();
     formData.append('file', uploadFile);
     formData.append('categoryId', uploadCategoryId);
@@ -180,18 +223,83 @@ export default function MediaPage() {
     if (uploadContentName.trim()) formData.append('contentName', uploadContentName.trim());
 
     try {
-      await api.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setShowUploadModal(false);
-      setUploadFile(null);
-      setUploadCategoryId('');
-      setUploadTypeId('');
-      setUploadContentName('');
-      fetchMedia();
+      await api.post('/media/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        signal: controller.signal,
+        onUploadProgress: (progressEvent) => {
+          const loaded = progressEvent.loaded || 0;
+          const total = progressEvent.total || totalBytes;
+          const pct = Math.min(Math.round((loaded * 100) / total), 100);
+
+          const now = performance.now();
+          const timeDiff = (now - lastTimeRef.current) / 1000;
+
+          let speedStr = '';
+          let etaStr = '';
+
+          if (timeDiff >= 0.3 || loaded === total) {
+            const bytesDiff = loaded - lastLoadedRef.current;
+            const bytesPerSec = timeDiff > 0 ? bytesDiff / timeDiff : 0;
+            speedStr = bytesPerSec > 0 ? `${formatFileSize(bytesPerSec)}/s` : '';
+
+            const remainingBytes = Math.max(0, total - loaded);
+            if (bytesPerSec > 0 && remainingBytes > 0) {
+              const remainingSec = Math.ceil(remainingBytes / bytesPerSec);
+              etaStr = remainingSec < 60 ? `~${remainingSec}s left` : `~${Math.ceil(remainingSec / 60)}m left`;
+            } else if (pct >= 100) {
+              etaStr = 'Finalizing...';
+            }
+
+            lastLoadedRef.current = loaded;
+            lastTimeRef.current = now;
+          }
+
+          setUploadState((prev) => ({
+            progress: pct,
+            loaded,
+            total,
+            speed: speedStr || prev.speed,
+            eta: etaStr || prev.eta,
+            stage: pct >= 100 ? 'processing' : 'uploading',
+          }));
+        },
+      });
+
+      setUploadState((prev) => ({
+        ...prev,
+        progress: 100,
+        stage: 'success',
+        speed: '',
+        eta: 'Completed',
+      }));
+
+      setTimeout(() => {
+        setShowUploadModal(false);
+        setUploadFile(null);
+        setUploadCategoryId('');
+        setUploadTypeId('');
+        setUploadContentName('');
+        setUploadState({ progress: 0, loaded: 0, total: 0, speed: '', eta: '', stage: 'idle' });
+        setUploading(false);
+        fetchMedia();
+      }, 700);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Upload failed');
-    } finally {
+      if (controller.signal.aborted) {
+        setError('Upload cancelled');
+      } else {
+        setError(err.response?.data?.error || 'Upload failed');
+      }
+      setUploadState((prev) => ({ ...prev, stage: 'error' }));
       setUploading(false);
+    } finally {
+      abortControllerRef.current = null;
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
@@ -297,12 +405,6 @@ export default function MediaPage() {
     }
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
 
   const clearFilters = () => {
     setFilterCategoryId('');
@@ -471,14 +573,34 @@ export default function MediaPage() {
         {showUploadModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="aether-modal-overlay">
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="aether-card max-w-lg w-full p-6 relative">
-              <button onClick={() => { setShowUploadModal(false); setUploadFile(null); setUploadCategoryId(''); setUploadTypeId(''); }} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg bg-plate/80 hover:bg-edge text-text-dim hover:text-text-prime transition-all">
+              <button
+                onClick={() => {
+                  if (uploading) return;
+                  setShowUploadModal(false);
+                  setUploadFile(null);
+                  setUploadCategoryId('');
+                  setUploadTypeId('');
+                  setUploadContentName('');
+                }}
+                disabled={uploading}
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg bg-plate/80 hover:bg-edge text-text-dim hover:text-text-prime transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
                 <Icon name="close" className="text-lg" />
               </button>
-              <h3 className="text-lg font-medium text-text-prime mb-6">Upload Media</h3>
+
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-cyan/10 flex items-center justify-center text-cyan">
+                  <Icon name="cloud_upload" className="text-2xl" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-text-prime leading-tight">Upload Media</h3>
+                  <p className="text-xs text-text-dim mt-0.5">Upload new content to schedule across display devices.</p>
+                </div>
+              </div>
 
               <div className="space-y-5">
                 {/* Step 1: Category & Type */}
-                <div className="space-y-4">
+                <div className={`space-y-4 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
                   <div>
                     <label className="block text-xs font-medium text-text-dim uppercase tracking-wider mb-1.5">Content Category</label>
                     <Select value={uploadCategoryId} onChange={setUploadCategoryId} options={uploadCategoryOptions} placeholder="Select category..." />
@@ -499,7 +621,7 @@ export default function MediaPage() {
                   </div>
                 </div>
 
-                {/* Step 2: File */}
+                {/* Step 2: File Selection & Progress Card */}
                 {!uploadFile ? (
                   <div
                     onClick={() => fileInputRef.current?.click()}
@@ -513,27 +635,124 @@ export default function MediaPage() {
                     <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3 p-3 bg-plate rounded-lg border border-edge">
-                    <Icon name={getMediaIcon(detectFileTypeLabel(uploadFile).toUpperCase())} className="text-2xl text-cyan" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-text-prime truncate">{uploadFile.name}</p>
-                      <p className="text-xs text-text-dim">{detectFileTypeLabel(uploadFile)} • {formatFileSize(uploadFile.size)}</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-plate rounded-lg border border-edge">
+                      <Icon name={getMediaIcon(detectFileTypeLabel(uploadFile).toUpperCase())} className="text-2xl text-cyan" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-text-prime truncate font-medium">{uploadFile.name}</p>
+                        <p className="text-xs text-text-dim">{detectFileTypeLabel(uploadFile)} • {formatFileSize(uploadFile.size)}</p>
+                      </div>
+                      {!uploading && (
+                        <button onClick={() => setUploadFile(null)} className="text-text-dim hover:text-red-500 transition-colors">
+                          <Icon name="close" className="text-sm" />
+                        </button>
+                      )}
                     </div>
-                    <button onClick={() => setUploadFile(null)} className="text-text-dim hover:text-red-500 transition-colors">
-                      <Icon name="close" className="text-sm" />
-                    </button>
+
+                    {/* Dedicated Live Upload Progress Card */}
+                    {uploading && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 rounded-xl border border-edge bg-plate/80 space-y-3 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {uploadState.stage === 'uploading' && (
+                              <>
+                                <span className="relative flex h-2.5 w-2.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan"></span>
+                                </span>
+                                <span className="text-xs font-semibold text-text-prime">Uploading to cloud...</span>
+                              </>
+                            )}
+                            {uploadState.stage === 'processing' && (
+                              <>
+                                <Icon name="sync" className="text-sm text-amber-500 animate-spin" />
+                                <span className="text-xs font-semibold text-amber-600">Processing on server...</span>
+                              </>
+                            )}
+                            {uploadState.stage === 'success' && (
+                              <>
+                                <Icon name="check_circle" className="text-sm text-emerald-500" />
+                                <span className="text-xs font-semibold text-emerald-600">Upload complete!</span>
+                              </>
+                            )}
+                            {uploadState.stage === 'error' && (
+                              <>
+                                <Icon name="error" className="text-sm text-red-500" />
+                                <span className="text-xs font-semibold text-red-600">Upload interrupted</span>
+                              </>
+                            )}
+                          </div>
+                          <span className="text-sm font-data font-bold text-cyan">
+                            {uploadState.progress}%
+                          </span>
+                        </div>
+
+                        {/* Visual Progress Bar Track & Fill */}
+                        <div className="w-full h-2.5 bg-plate-hover rounded-full overflow-hidden border border-edge relative">
+                          <motion.div
+                            className={`h-full rounded-full transition-all duration-200 ${
+                              uploadState.stage === 'success'
+                                ? 'bg-emerald-500'
+                                : uploadState.stage === 'processing'
+                                ? 'bg-amber-500'
+                                : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan'
+                            }`}
+                            style={{ width: `${uploadState.progress}%` }}
+                          />
+                        </div>
+
+                        {/* Realtime Transfer Metrics */}
+                        <div className="flex items-center justify-between text-xs text-text-dim font-data">
+                          <span>
+                            {formatFileSize(uploadState.loaded)} / {formatFileSize(uploadState.total || uploadFile.size)}
+                          </span>
+                          <span>
+                            {[uploadState.speed, uploadState.eta].filter(Boolean).join(' • ')}
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
                   </div>
                 )}
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => { setShowUploadModal(false); setUploadFile(null); setUploadCategoryId(''); setUploadTypeId(''); setUploadContentName(''); }} className="aether-btn-ghost flex-1">
-                    Cancel
-                  </button>
-                  <button onClick={handleUpload} disabled={uploading || !uploadCategoryId || !uploadTypeId || !uploadFile} className="aether-btn flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
-                    <Icon name={uploading ? 'sync' : 'upload_file'} className={`text-sm ${uploading ? 'animate-spin' : ''}`} />
-                    <span>{uploading ? 'Uploading...' : 'Upload'}</span>
-                  </button>
+                  {uploading ? (
+                    <button
+                      onClick={handleCancelUpload}
+                      className="aether-btn-ghost flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                    >
+                      <Icon name="cancel" className="text-sm" />
+                      <span>Cancel Upload</span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setShowUploadModal(false);
+                          setUploadFile(null);
+                          setUploadCategoryId('');
+                          setUploadTypeId('');
+                          setUploadContentName('');
+                        }}
+                        className="aether-btn-ghost flex-1"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleUpload}
+                        disabled={!uploadCategoryId || !uploadTypeId || !uploadFile}
+                        className="aether-btn flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="upload_file" className="text-sm" />
+                        <span>Upload</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -744,6 +963,37 @@ export default function MediaPage() {
                 </div>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Upload Progress Widget (when modal is closed or minimized) */}
+      <AnimatePresence>
+        {uploading && !showUploadModal && uploadFile && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            onClick={() => setShowUploadModal(true)}
+            className="fixed bottom-6 right-6 z-50 bg-white border border-edge shadow-2xl rounded-2xl p-4 w-84 space-y-2 cursor-pointer hover:border-cyan transition-all"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <Icon name={getMediaIcon(detectFileTypeLabel(uploadFile).toUpperCase())} className="text-cyan text-lg shrink-0" />
+                <span className="text-xs font-medium text-text-prime truncate">{uploadFile.name}</span>
+              </div>
+              <span className="text-xs font-data font-bold text-cyan ml-2 shrink-0">{uploadState.progress}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-plate rounded-full overflow-hidden border border-edge">
+              <div
+                className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan rounded-full transition-all duration-200"
+                style={{ width: `${uploadState.progress}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-text-dim font-data">
+              <span>{uploadState.stage === 'processing' ? 'Processing on server...' : uploadState.speed || 'Uploading...'}</span>
+              <span>{uploadState.eta}</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
